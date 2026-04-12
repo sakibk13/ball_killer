@@ -23,15 +23,28 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
   final _tapeCountController = TextEditingController(text: '0');
   final _infoController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
+  String _selectedMonthYear = 'Overall';
+  late List<String> _monthList;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _generateMonthList();
+    final isAdmin = Provider.of<AuthProvider>(context, listen: false).isAdmin;
+    _tabController = TabController(length: isAdmin ? 3 : 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ContributionProvider>(context, listen: false).fetchContributions();
       Provider.of<BallProvider>(context, listen: false).fetchPlayers();
     });
+  }
+
+  void _generateMonthList() {
+    _monthList = ['Overall'];
+    DateTime now = DateTime.now();
+    for (int i = 0; i < 12; i++) {
+      DateTime date = DateTime(now.year, now.month - i, 1);
+      _monthList.add(DateFormat('MM-yyyy').format(date));
+    }
   }
 
   void _updateTotal() {
@@ -41,9 +54,24 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
     if (total > 0) _takaController.text = total.toString();
   }
 
-  void _showAddSheet() {
+  void _showAddSheet({Contribution? editItem}) {
     final players = Provider.of<BallProvider>(context, listen: false).players;
-    _selectedDate = DateTime.now(); 
+    
+    if (editItem != null) {
+      _selectedDate = editItem.date;
+      _nameController.text = editItem.name;
+      _takaController.text = editItem.taka.toInt().toString();
+      _ballCountController.text = editItem.ballCount.toString();
+      _tapeCountController.text = editItem.tapeCount.toString();
+      _infoController.text = editItem.ballTape;
+    } else {
+      _selectedDate = DateTime.now(); 
+      _nameController.clear();
+      _takaController.clear();
+      _ballCountController.text = '0';
+      _tapeCountController.text = '0';
+      _infoController.clear();
+    }
 
     showModalBottomSheet(
       context: context,
@@ -59,7 +87,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
               children: [
                 Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(10))),
                 const SizedBox(height: 20),
-                Text('ADD CONTRIBUTION', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, letterSpacing: 1.5)),
+                Text(editItem == null ? 'ADD CONTRIBUTION' : 'UPDATE CONTRIBUTION', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, letterSpacing: 1.5)),
                 const SizedBox(height: 25),
                 
                 GestureDetector(
@@ -97,6 +125,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                 const SizedBox(height: 20),
 
                 Autocomplete<String>(
+                  initialValue: TextEditingValue(text: _nameController.text),
                   optionsBuilder: (v) => players.where((p) => p.name.toLowerCase().contains(v.text.toLowerCase())).map((p) => p.name),
                   onSelected: (v) => _nameController.text = v,
                   fieldViewBuilder: (ctx, focusCtrl, focus, onSub) => TextField(
@@ -139,18 +168,28 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                       int balls = int.tryParse(_ballCountController.text) ?? 0;
                       int tapes = int.tryParse(_tapeCountController.text) ?? 0;
                       
+                      // For editing, if infoController hasn't changed manually, we might want to regenerate note.
+                      // Simple approach: regenerate if counts changed.
                       List<String> items = [];
                       if (balls > 0) items.add('$balls ball${balls > 1 ? "s" : ""}');
                       if (tapes > 0) items.add('$tapes tape${tapes > 1 ? "s" : ""}');
                       
                       String autoNote = items.join(", ");
                       String manualNote = _infoController.text.trim();
-                      String finalNote = autoNote;
-                      if (manualNote.isNotEmpty) {
-                        finalNote = autoNote.isEmpty ? manualNote : "$autoNote | $manualNote";
+                      String finalNote = manualNote;
+                      
+                      // Logic to avoid duplicating "X balls, Y tapes" if it's already in manualNote
+                      if (autoNote.isNotEmpty && !manualNote.contains(autoNote)) {
+                         // This is tricky if user edited the note. Let's just use what's in _infoController for edit, 
+                         // or regenerate for new.
+                         if (editItem == null) {
+                            finalNote = autoNote;
+                            if (manualNote.isNotEmpty) finalNote = "$autoNote | $manualNote";
+                         }
                       }
 
                       final c = Contribution(
+                        id: editItem?.id,
                         name: _nameController.text,
                         taka: double.parse(_takaController.text),
                         date: _selectedDate,
@@ -159,14 +198,19 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                         ballCount: balls,
                         tapeCount: tapes,
                       );
-                      final success = await Provider.of<ContributionProvider>(context, listen: false).addContribution(c);
+                      
+                      final provider = Provider.of<ContributionProvider>(context, listen: false);
+                      final success = editItem == null 
+                          ? await provider.addContribution(c)
+                          : await provider.updateContribution(c);
+
                       if (mounted) {
                         Navigator.pop(context);
                         StatusDialog.show(
                           context, 
-                          message: success ? "The contribution has been logged." : "Check your connection and try again.", 
+                          message: success ? (editItem == null ? "Contribution logged." : "Contribution updated.") : "Action failed.", 
                           isSuccess: success, 
-                          title: success ? "RECORD SAVED" : "SAVE FAILED",
+                          title: success ? "SUCCESS" : "FAILED",
                         );
                       }
                     },
@@ -175,7 +219,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       elevation: 8,
                     ),
-                    child: Text('SAVE RECORD', style: GoogleFonts.bebasNeue(fontSize: 20, letterSpacing: 1.2, color: Colors.white)),
+                    child: Text(editItem == null ? 'SAVE RECORD' : 'UPDATE RECORD', style: GoogleFonts.bebasNeue(fontSize: 20, letterSpacing: 1.2, color: Colors.white)),
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -199,13 +243,14 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.white24, size: 20), onPressed: () {
-                int v = int.parse(ctrl.text);
+                int v = int.tryParse(ctrl.text) ?? 0;
                 if (v > 0) ctrl.text = (v - 1).toString();
                 onUpdate();
               }),
               Text(ctrl.text, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               IconButton(icon: const Icon(Icons.add_circle_outline, color: Colors.orange, size: 20), onPressed: () {
-                ctrl.text = (int.parse(ctrl.text) + 1).toString();
+                int v = int.tryParse(ctrl.text) ?? 0;
+                ctrl.text = (v + 1).toString();
                 onUpdate();
               }),
             ],
@@ -244,31 +289,149 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
           indicatorColor: Colors.orange,
           labelColor: Colors.orange,
           unselectedLabelColor: Colors.white38,
-          tabs: const [Tab(text: 'MONTHLY SUMMARY'), Tab(text: 'DETAILED LOGS')],
+          labelStyle: GoogleFonts.bebasNeue(fontSize: 14, letterSpacing: 1),
+          tabs: [
+            const Tab(text: 'SUMMARY'),
+            const Tab(text: 'DETAILED'),
+            if (isAdmin) const Tab(text: 'MANAGE'),
+          ],
         ),
       ),
       body: RefreshIndicator(
         onRefresh: () => provider.fetchContributions(force: true),
         color: Colors.orange,
-        child: TabBarView(
-          controller: _tabController,
+        child: Column(
           children: [
-            _buildMonthlyDetailed(provider),
-            _buildFullHistory(provider, isAdmin),
+            _buildMonthPicker(),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildMonthlyDetailed(provider),
+                  _buildFullHistory(provider),
+                  if (isAdmin) _buildManageTab(provider),
+                ],
+              ),
+            ),
           ],
         ),
       ),
       floatingActionButton: isAdmin ? FloatingActionButton(
-        onPressed: _showAddSheet, 
+        onPressed: () => _showAddSheet(), 
         backgroundColor: Colors.orange, 
         child: const Icon(Icons.add_card, color: Colors.white)
       ) : null,
     );
   }
 
+  Widget _buildManageTab(ContributionProvider p) {
+    final list = _selectedMonthYear == 'Overall' 
+        ? p.contributions 
+        : p.contributions.where((c) => c.monthYear == _selectedMonthYear).toList();
+    
+    if (list.isEmpty) return const Center(child: Text('No records found', style: TextStyle(color: Colors.white24)));
+    
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: list.length,
+      itemBuilder: (ctx, i) {
+        final item = list[i];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05), 
+            borderRadius: BorderRadius.circular(20), 
+            border: Border.all(color: Colors.white10)
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.name, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('${DateFormat('dd MMM yyyy').format(item.date)} | ${item.taka.toStringAsFixed(0)}৳', style: const TextStyle(color: Colors.orange, fontSize: 12)),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent, size: 20),
+                onPressed: () => _showAddSheet(editItem: item),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                onPressed: () => _showDeleteConfirm(item.id!, p),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showDeleteConfirm(String id, ContributionProvider p) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF020C3B),
+        title: Text('DELETE CONTRIBUTION?', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1)),
+        content: const Text('Are you sure you want to remove this transaction record?', style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () {
+              p.deleteContribution(id);
+              Navigator.pop(context);
+            },
+            child: const Text('DELETE', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMonthPicker() {
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      color: const Color(0xFF020C3B),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 15),
+        itemCount: _monthList.length,
+        itemBuilder: (context, index) {
+          final m = _monthList[index];
+          final isSelected = _selectedMonthYear == m;
+          String display = m == 'Overall' ? 'OVERALL' : DateFormat('MMM yy').format(DateFormat('MM-yyyy').parse(m)).toUpperCase();
+          return GestureDetector(
+            onTap: () => setState(() => _selectedMonthYear = m),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                gradient: isSelected ? const LinearGradient(colors: [Colors.orange, Colors.deepOrange]) : null,
+                color: isSelected ? null : Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: isSelected ? Colors.orange : Colors.white10),
+              ),
+              alignment: Alignment.center,
+              child: Text(display, style: GoogleFonts.bebasNeue(color: isSelected ? Colors.white : Colors.white38, fontSize: 14)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildMonthlyDetailed(ContributionProvider p) {
-    final data = p.getGroupedContributions();
-    if (data.isEmpty) return const Center(child: Text('No records found', style: TextStyle(color: Colors.white24)));
+    final allData = p.getGroupedContributions();
+    final data = _selectedMonthYear == 'Overall' 
+        ? allData 
+        : (allData.containsKey(_selectedMonthYear) ? { _selectedMonthYear: allData[_selectedMonthYear]! } : <String, Map<String, double>>{});
+
+    if (data.isEmpty) return const Center(child: Text('No records found for this period', style: TextStyle(color: Colors.white24)));
     
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -358,9 +521,12 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
     );
   }
 
-  Widget _buildFullHistory(ContributionProvider p, bool isAdmin) {
-    final list = p.contributions;
-    if (list.isEmpty) return const Center(child: Text('No transaction history', style: TextStyle(color: Colors.white24)));
+  Widget _buildFullHistory(ContributionProvider p) {
+    final list = _selectedMonthYear == 'Overall' 
+        ? p.contributions 
+        : p.contributions.where((c) => c.monthYear == _selectedMonthYear).toList();
+    
+    if (list.isEmpty) return const Center(child: Text('No transaction history for this period', style: TextStyle(color: Colors.white24)));
     
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -399,20 +565,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('${item.taka.toStringAsFixed(0)} ৳', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 22)),
-                  if (isAdmin) 
-                    GestureDetector(
-                      onTap: () => p.deleteContribution(item.id!),
-                      child: const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Icon(Icons.delete_outline, color: Colors.white24, size: 18),
-                      ),
-                    ),
-                ],
-              )
+              Text('${item.taka.toStringAsFixed(0)} ৳', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 22)),
             ],
           ),
         );

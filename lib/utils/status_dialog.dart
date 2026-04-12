@@ -34,27 +34,21 @@ class StatusDialog {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Larger Square Box for GIF/Icon
+                // Icon instead of GIF for faster response
                 Container(
-                  width: 160,
-                  height: 160,
+                  width: 100,
+                  height: 100,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(50),
                     border: Border.all(color: Colors.white10),
                   ),
-                  child: isSuccess 
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: Image.asset(
-                          'assets/added.gif', 
-                          fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) => const Icon(Icons.check_circle, color: Colors.greenAccent, size: 80),
-                        ),
-                      )
-                    : const Icon(Icons.error_outline, color: Colors.redAccent, size: 80),
-                ),
-                const SizedBox(height: 30),
+                  child: Icon(
+                    isSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                    color: isSuccess ? Colors.greenAccent : Colors.redAccent,
+                    size: 60,
+                  ),
+                ),                const SizedBox(height: 30),
                 Text(
                   title.toUpperCase(),
                   textAlign: TextAlign.center,

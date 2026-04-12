@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import '../providers/auth_provider.dart';
 import '../providers/ball_provider.dart';
@@ -20,26 +19,14 @@ class ManagePlayersScreen extends StatefulWidget {
 class _ManagePlayersScreenState extends State<ManagePlayersScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
-  String _selectedMonthYear = DateFormat('MM-yyyy').format(DateTime.now());
-  late List<String> _monthList;
   final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    _generateMonthList();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<BallProvider>(context, listen: false).init();
     });
-  }
-
-  void _generateMonthList() {
-    _monthList = ['Overall'];
-    DateTime now = DateTime.now();
-    for (int i = 0; i < 12; i++) {
-      DateTime date = DateTime(now.year, now.month - i, 1);
-      _monthList.add(DateFormat('MM-yyyy').format(date));
-    }
   }
 
   void _showAddPlayerSheet() {
@@ -101,7 +88,7 @@ class _ManagePlayersScreenState extends State<ManagePlayersScreen> {
                         photoUrl: base64Image,
                         totalLost: 0,
                       );
-                      final success = await Provider.of<BallProvider>(context, listen: false).addPlayerDirect(player);
+                      await Provider.of<BallProvider>(context, listen: false).addPlayerDirect(player);
                       if (mounted) {
                         Navigator.pop(context);
                         StatusDialog.show(
@@ -120,83 +107,6 @@ class _ManagePlayersScreenState extends State<ManagePlayersScreen> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  void _showForceEntryDialog(Player player) {
-    int amount = 1;
-    DateTime selectedDate = DateTime.now();
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateDialog) => AlertDialog(
-          backgroundColor: const Color(0xFF020C3B),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('FORCE ENTRY: ${player.name.toUpperCase()}', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Log multiple lost balls for a specific past date.', style: TextStyle(color: Colors.white38, fontSize: 12)),
-              const SizedBox(height: 20),
-              GestureDetector(
-                onTap: () async {
-                  final DateTime? picked = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
-                  if (picked != null) setStateDialog(() => selectedDate = picked);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.white10)),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(DateFormat('dd MMM, yyyy').format(selectedDate), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      const Icon(Icons.calendar_today, color: Colors.orange, size: 18),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Balls Lost:', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
-                  Row(
-                    children: [
-                      IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.white24), onPressed: () { if (amount > 1) setStateDialog(() => amount--); }),
-                      Text('$amount', style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 24)),
-                      IconButton(icon: const Icon(Icons.add_circle_outline, color: Colors.orange), onPressed: () => setStateDialog(() => amount++)),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL', style: TextStyle(color: Colors.white38))),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await Provider.of<BallProvider>(context, listen: false).addBallRecordWithDate(
-                  playerId: player.id!,
-                  playerName: player.name,
-                  lostCount: amount,
-                  date: selectedDate,
-                  recordedBy: 'Admin',
-                );
-                StatusDialog.show(
-                  context, 
-                  message: "$amount balls logged for ${player.name}.", 
-                  isSuccess: true, 
-                  title: "LOSS RECORDED",
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-              child: const Text('SAVE LOSS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
         ),
       ),
     );
@@ -295,6 +205,30 @@ class _ManagePlayersScreenState extends State<ManagePlayersScreen> {
     );
   }
 
+  void _showDeleteConfirm(Player player) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF020C3B),
+        title: Text('DELETE PLAYER?', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1)),
+        content: Text('Are you sure you want to remove ${player.name} from the system? This will also delete their login account.', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await Provider.of<BallProvider>(context, listen: false).deletePlayer(player.id!, player.phone);
+              if (mounted) {
+                StatusDialog.show(context, message: "Player removed successfully.", isSuccess: true, title: "PLAYER DELETED");
+              }
+            },
+            child: const Text('DELETE', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPopInput(TextEditingController ctrl, String label, IconData icon, {TextInputType? keyboard}) {
     return TextField(
       controller: ctrl,
@@ -315,8 +249,8 @@ class _ManagePlayersScreenState extends State<ManagePlayersScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<BallProvider>(context);
-    final players = provider.getPlayersWithTotals(monthYear: _selectedMonthYear);
-    final filtered = players.where((p) => p['name'].toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    final players = provider.players;
+    final filtered = players.where((p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFF051970),
@@ -327,37 +261,6 @@ class _ManagePlayersScreenState extends State<ManagePlayersScreen> {
       ),
       body: Column(
         children: [
-          Container(
-            height: 70,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            color: const Color(0xFF020C3B),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 15),
-              itemCount: _monthList.length,
-              itemBuilder: (context, index) {
-                final m = _monthList[index];
-                final isSelected = _selectedMonthYear == m;
-                String display = m == 'Overall' ? 'OVERALL' : DateFormat('MMM yy').format(DateFormat('MM-yyyy').parse(m)).toUpperCase();
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedMonthYear = m),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.only(right: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    decoration: BoxDecoration(
-                      gradient: isSelected ? const LinearGradient(colors: [Colors.orange, Colors.deepOrange]) : null,
-                      color: isSelected ? null : Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: isSelected ? Colors.orange : Colors.white10),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(display, style: GoogleFonts.bebasNeue(color: isSelected ? Colors.white : Colors.white38, fontSize: 14)),
-                  ),
-                );
-              },
-            ),
-          ),
           Padding(
             padding: const EdgeInsets.all(15),
             child: TextField(
@@ -383,8 +286,7 @@ class _ManagePlayersScreenState extends State<ManagePlayersScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: filtered.length,
                 itemBuilder: (context, i) {
-                  final data = filtered[i];
-                  final player = provider.players.firstWhere((p) => p.id == data['id']);
+                  final player = filtered[i];
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(12),
@@ -410,17 +312,7 @@ class _ManagePlayersScreenState extends State<ManagePlayersScreen> {
                           ),
                         ),
                         IconButton(icon: const Icon(Icons.edit_outlined, color: Colors.orange, size: 20), onPressed: () => _showEditSheet(player)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                          child: Row(
-                            children: [
-                              IconButton(icon: const Icon(Icons.add_circle_outline, color: Colors.redAccent, size: 22), onPressed: () => _showForceEntryDialog(player), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
-                              const SizedBox(width: 8),
-                              Text('${data['total']}', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 20)),
-                            ],
-                          ),
-                        )
+                        IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20), onPressed: () => _showDeleteConfirm(player)),
                       ],
                     ),
                   );

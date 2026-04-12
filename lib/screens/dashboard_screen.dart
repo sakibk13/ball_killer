@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/ball_provider.dart';
 import '../providers/inventory_provider.dart';
 import 'manage_players_screen.dart';
+import 'player_ball_loss_screen.dart';
 import 'records_screen.dart';
 import 'inventory_screen.dart';
 import 'contribution_screen.dart';
@@ -20,20 +21,30 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
+  late AnimationController _fadeController;
+  
   @override
   void initState() {
     super.initState();
+    _fadeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
+    _fadeController.forward();
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<BallProvider>(context, listen: false).init();
       Provider.of<InventoryProvider>(context, listen: false).fetchInventory();
     });
   }
 
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
+  }
+
   Uint8List? _safeDecode(String? base64String) {
     if (base64String == null || base64String.trim().isEmpty) return null;
     try {
-      // Handle potential data:image/png;base64, prefixes
       String cleanString = base64String.trim();
       if (cleanString.contains(',')) {
         cleanString = cleanString.split(',').last;
@@ -57,160 +68,216 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final photoBytes = _safeDecode(user?.photoUrl);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF051970),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF020C3B),
-        elevation: 0,
-        title: Row(
-          children: [
-            Image.asset('assets/icon/logo3.png', width: 35, height: 35, errorBuilder: (c, e, s) => const Icon(Icons.sports_cricket, color: Colors.orange)),
-            const SizedBox(width: 10),
-            Text('DASHBOARD', style: GoogleFonts.bebasNeue(letterSpacing: 1.5, color: Colors.white, fontSize: 22)),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Colors.white70),
-            onPressed: () => authProvider.logout(),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF020C3B), Color(0xFF051970), Color(0xFF0A2A99)],
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await authProvider.refreshUser();
-          await ballProvider.refresh();
-          await invProvider.fetchInventory(force: true);
-        },
-        color: Colors.orange,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        ),
+        child: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              await authProvider.refreshUser();
+              await ballProvider.refresh();
+              await invProvider.fetchInventory(force: true);
+            },
+            color: Colors.orange,
+            child: FadeTransition(
+              opacity: _fadeController,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 20),
+                    _buildHeader(user, photoBytes, authProvider),
+                    const SizedBox(height: 30),
+                    _buildStatsGrid(remainingBalls, ballProvider, invProvider),
+                    const SizedBox(height: 35),
+                    Row(
                       children: [
-                        Text('HELLO,', style: GoogleFonts.poppins(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                        Text(user?.name.toUpperCase() ?? 'PLAYER', style: GoogleFonts.bebasNeue(fontSize: 28, color: Colors.white, letterSpacing: 1)),
+                        Container(width: 4, height: 20, decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(2))),
+                        const SizedBox(width: 10),
+                        Text('QUICK ACTIONS', style: GoogleFonts.bebasNeue(fontSize: 20, color: Colors.white, letterSpacing: 1.5)),
                       ],
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.orange.withOpacity(0.5), width: 2),
+                    const SizedBox(height: 20),
+                    _buildActionGrid(context, isAdmin),
+                    const SizedBox(height: 40),
+                    Center(
+                      child: Opacity(
+                        opacity: 0.05,
+                        child: Image.asset('assets/icon/logo3.png', width: 100, errorBuilder: (c, e, s) => const SizedBox()),
+                      ),
                     ),
-                    child: CircleAvatar(
-                      radius: 35,
-                      backgroundColor: Colors.white.withOpacity(0.1),
-                      backgroundImage: photoBytes != null ? MemoryImage(photoBytes) : null,
-                      child: photoBytes == null
-                          ? Text(user?.name[0].toUpperCase() ?? '?', style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 28))
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 25),
-              _buildStatsCard(remainingBalls, ballProvider),
-              const SizedBox(height: 30),
-              Text('QUICK ACTIONS', style: GoogleFonts.bebasNeue(fontSize: 18, color: Colors.orange, letterSpacing: 1)),
-              const SizedBox(height: 15),
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                mainAxisSpacing: 15,
-                crossAxisSpacing: 15,
-                childAspectRatio: 1.2,
-                children: [
-                  _buildMenuBtn(context, 'RECORDS', Icons.history_rounded, const Color(0xFF42A5F5), const RecordsScreen()),
-                  _buildMenuBtn(context, 'TOP PLAYERS', Icons.leaderboard_rounded, const Color(0xFFFFA726), const LeaderboardScreen()),
-                  _buildMenuBtn(context, 'INVENTORY', Icons.inventory_2_rounded, const Color(0xFF66BB6A), const InventoryScreen()),
-                  _buildMenuBtn(context, 'FINANCIALS', Icons.payments_rounded, const Color(0xFFAB47BC), const ContributionScreen()),
-                  if (isAdmin)
-                    _buildMenuBtn(context, 'MANAGE', Icons.manage_accounts_rounded, const Color(0xFFEF5350), const ManagePlayersScreen()),
-                ],
-              ),
-              const SizedBox(height: 40),
-              Center(
-                child: Opacity(
-                  opacity: 0.1,
-                  child: Image.asset('assets/icon/logo3.png', width: 80, errorBuilder: (c, e, s) => const SizedBox()),
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStatsCard(int stock, BallProvider ball) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white10),
-        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 5))],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _statItem('STOCK IN HAND', '$stock', Colors.greenAccent, Icons.inventory),
-          Container(width: 1, height: 40, color: Colors.white10),
-          _statItem('LOST TODAY', '${ball.todayRecords.fold(0, (sum, r) => sum + r.lostCount)}', Colors.redAccent, Icons.auto_delete),
-        ],
-      ),
-    );
-  }
-
-  Widget _statItem(String label, String val, Color color, IconData icon) {
-    return Column(
+  Widget _buildHeader(user, photoBytes, authProvider) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color.withOpacity(0.5), size: 12),
-            const SizedBox(width: 5),
-            Text(label, style: GoogleFonts.poppins(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+            Text('WELCOME BACK,', style: GoogleFonts.poppins(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            Text(user?.name.toUpperCase() ?? 'PLAYER', style: GoogleFonts.bebasNeue(fontSize: 32, color: Colors.white, letterSpacing: 1.2)),
           ],
         ),
-        const SizedBox(height: 5),
-        Text(val, style: GoogleFonts.bebasNeue(fontSize: 36, color: color, letterSpacing: 1)),
+        Row(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 15, spreadRadius: 2)],
+              ),
+              child: CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.white.withOpacity(0.1),
+                backgroundImage: photoBytes != null ? MemoryImage(photoBytes) : null,
+                child: photoBytes == null
+                    ? Text(user?.name[0].toUpperCase() ?? '?', style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 24))
+                    : null,
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton(
+              icon: const Icon(Icons.power_settings_new_rounded, color: Colors.redAccent, size: 28),
+              onPressed: () => authProvider.logout(),
+            ),
+          ],
+        ),
       ],
     );
   }
 
-  Widget _buildMenuBtn(BuildContext context, String label, IconData icon, Color color, Widget screen) {
-    return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => screen)),
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildStatsGrid(int stock, BallProvider ball, InventoryProvider inv) {
+    int lostToday = ball.todayRecords.fold(0, (sum, r) => sum + r.lostCount);
+    int unintentional = inv.getUninteniollyLostForMonth('Overall');
+    
+    return Column(
+      children: [
+        Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 28),
-            ),
-            const SizedBox(height: 10),
-            Text(label, style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 16, letterSpacing: 1)),
+            Expanded(child: _buildModernStatCard('STOCK COUNT', '$stock', Colors.greenAccent, Icons.inventory_2_outlined)),
+            const SizedBox(width: 15),
+            Expanded(child: _buildModernStatCard('LOST TODAY', '$lostToday', Colors.redAccent, Icons.running_with_errors_outlined)),
           ],
         ),
+        const SizedBox(height: 15),
+        _buildModernStatCard('UNINTENTIONAL LOSS (OVERALL)', '$unintentional', Colors.orangeAccent, Icons.warning_amber_rounded, fullWidth: true),
+      ],
+    );
+  }
+
+  Widget _buildModernStatCard(String label, String val, Color color, IconData icon, {bool fullWidth = false}) {
+    return Container(
+      width: fullWidth ? double.infinity : null,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white.withOpacity(0.08), Colors.white.withOpacity(0.02)],
+        ),
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(height: 15),
+          Text(val, style: GoogleFonts.bebasNeue(fontSize: 32, color: Colors.white, letterSpacing: 1)),
+          Text(label, style: GoogleFonts.poppins(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionGrid(BuildContext context, bool isAdmin) {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 15,
+      crossAxisSpacing: 15,
+      childAspectRatio: 1.1,
+      children: [
+        _buildActionCard(context, 'TRACK OVERVIEW', 'Professional history', Icons.auto_graph_rounded, const Color(0xFF42A5F5), const RecordsScreen()),
+        _buildActionCard(context, 'LEADERBOARD', 'Top ball killers', Icons.emoji_events_outlined, const Color(0xFFFFA726), const LeaderboardScreen()),
+        _buildActionCard(context, 'STOCK LOG', 'Manage inventory', Icons.analytics_outlined, const Color(0xFF66BB6A), const InventoryScreen()),
+        _buildActionCard(context, 'FINANCIALS', 'Club collections', Icons.account_balance_wallet_outlined, const Color(0xFFAB47BC), const ContributionScreen()),
+        if (isAdmin) ...[
+          _buildActionCard(context, 'RECORD LOSS', 'Log, Manage & Track', Icons.add_moderator_outlined, Colors.redAccent, const PlayerBallLossScreen()),
+          _buildActionCard(context, 'ADMIN PANEL', 'System management', Icons.admin_panel_settings_outlined, const Color(0xFFEF5350), const ManagePlayersScreen()),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildActionCard(BuildContext context, String title, String subtitle, IconData icon, Color color, Widget screen) {
+    return TweenAnimationBuilder(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 600),
+      builder: (context, double value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - value)),
+            child: InkWell(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => screen)),
+              borderRadius: BorderRadius.circular(30),
+              child: Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 8))],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [color.withOpacity(0.25), color.withOpacity(0.05)],
+                        ),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: color.withOpacity(0.2), width: 1),
+                      ),
+                      child: Icon(icon, color: color, size: 30),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(title, style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 18, letterSpacing: 1.2)),
+                    Text(subtitle, style: GoogleFonts.poppins(color: Colors.white24, fontSize: 8, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

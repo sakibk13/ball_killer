@@ -41,6 +41,17 @@ class DatabaseService {
     }
   }
 
+  Future<bool> updateInventory(Inventory inventory) async {
+    try {
+      if (inventory.id == null) return false;
+      await _db.collection('inventory').doc(inventory.id!).update(inventory.toMap());
+      return true;
+    } catch (e) {
+      debugPrint('!!! UPDATE INVENTORY ERROR: $e');
+      return false;
+    }
+  }
+
   Future<void> deleteInventory(String id) async {
     try {
       await _db.collection('inventory').doc(id).delete();
@@ -66,6 +77,17 @@ class DatabaseService {
       return true;
     } catch (e) {
       debugPrint('!!! ADD CONTRIBUTION ERROR: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateContribution(Contribution contribution) async {
+    try {
+      if (contribution.id == null) return false;
+      await _db.collection('contributions').doc(contribution.id!).update(contribution.toMap());
+      return true;
+    } catch (e) {
+      debugPrint('!!! UPDATE CONTRIBUTION ERROR: $e');
       return false;
     }
   }
@@ -109,9 +131,21 @@ class DatabaseService {
       await _db.collection('users').add(user.toMap());
       
       // 3. Check if they were already added as a 'player' by an admin
-      final existingPlayer = await _db.collection('players').where('phone', isEqualTo: user.phone).limit(1).get();
+      // Check by phone first
+      final phoneMatch = await _db.collection('players').where('phone', isEqualTo: user.phone).limit(1).get();
       
-      if (existingPlayer.docs.isEmpty) {
+      QuerySnapshot<Map<String, dynamic>>? existingPlayer;
+      if (phoneMatch.docs.isNotEmpty) {
+        existingPlayer = phoneMatch;
+      } else {
+        // Fallback: Check by name to prevent duplicates if admin entered wrong number
+        final nameMatch = await _db.collection('players').where('name', isEqualTo: user.name).limit(1).get();
+        if (nameMatch.docs.isNotEmpty) {
+          existingPlayer = nameMatch;
+        }
+      }
+      
+      if (existingPlayer == null || existingPlayer.docs.isEmpty) {
         // Create new player entry if none exists
         final playerMap = {
           'name': user.name,
@@ -126,6 +160,7 @@ class DatabaseService {
         // This prevents double entries for the same person
         await _db.collection('players').doc(existingPlayer.docs.first.id).update({
           'name': user.name,
+          'phone': user.phone, // Ensure phone is updated/synced
           'password': user.password,
           'photoUrl': user.photoUrl != '' ? user.photoUrl : existingPlayer.docs.first.data()['photoUrl'],
         });
@@ -207,6 +242,23 @@ class DatabaseService {
     }
   }
 
+  Future<bool> deletePlayer(String id, String phone) async {
+    try {
+      // 1. Delete from players
+      await _db.collection('players').doc(id).delete();
+      
+      // 2. Delete from users if they exist
+      final userSnap = await _db.collection('users').where('phone', isEqualTo: phone).limit(1).get();
+      if (userSnap.docs.isNotEmpty) {
+        await _db.collection('users').doc(userSnap.docs.first.id).delete();
+      }
+      return true;
+    } catch (e) {
+      debugPrint('!!! DELETE PLAYER ERROR: $e');
+      return false;
+    }
+  }
+
   Future<Player?> getPlayerByName(String name) async {
     try {
       final snap = await _db.collection('players').where('name', isEqualTo: name).limit(1).get();
@@ -226,6 +278,23 @@ class DatabaseService {
       });
     } catch (e) {
       debugPrint('!!! ADD RECORD ERROR: $e');
+    }
+  }
+
+  Future<void> updateRecord(BallRecord record, int oldCount) async {
+    try {
+      if (record.id == null) return;
+      await _db.collection('records').doc(record.id!).update(record.toMap());
+      
+      // Adjust player's totalLost: remove old count, add new count
+      int diff = record.lostCount - oldCount;
+      if (diff != 0) {
+        await _db.collection('players').doc(record.playerId).update({
+          'totalLost': FieldValue.increment(diff)
+        });
+      }
+    } catch (e) {
+      debugPrint('!!! UPDATE RECORD ERROR: $e');
     }
   }
 

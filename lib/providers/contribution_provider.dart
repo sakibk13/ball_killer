@@ -40,6 +40,23 @@ class ContributionProvider with ChangeNotifier {
     return success;
   }
 
+  Future<bool> updateContribution(Contribution contribution) async {
+    _isLoading = true;
+    notifyListeners();
+    bool success = false;
+    try {
+      success = await DatabaseService().updateContribution(contribution);
+      if (success) {
+        await fetchContributions(force: true);
+      }
+    } catch (e) {
+      debugPrint('Update Contribution Error: $e');
+    }
+    _isLoading = false;
+    notifyListeners();
+    return success;
+  }
+
   Future<void> deleteContribution(String id) async {
     _isLoading = true;
     notifyListeners();

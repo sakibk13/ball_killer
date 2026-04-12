@@ -10,6 +10,23 @@ class AuthProvider with ChangeNotifier {
   User? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   bool get isAdmin => _currentUser?.phone == '01832465446';
+  bool get isGuest => _currentUser?.phone == 'guest_user';
+
+  Future<void> loginAsGuest() async {
+    _isLoading = true;
+    notifyListeners();
+    
+    // Create a dummy guest user
+    _currentUser = User(
+      name: 'Guest User',
+      phone: 'guest_user',
+      password: '',
+      isAdmin: false,
+    );
+    
+    _isLoading = false;
+    notifyListeners();
+  }
 
   Future<bool> login(String phone, String password) async {
     _isLoading = true;
@@ -36,7 +53,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> refreshUser() async {
-    if (_currentUser == null) return;
+    if (_currentUser == null || isGuest) return;
     try {
       final updatedUser = await DatabaseService().login(_currentUser!.phone, _currentUser!.password);
       if (updatedUser != null) {

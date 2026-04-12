@@ -185,6 +185,22 @@ class _AuthScreenState extends State<AuthScreen> {
                       onPressed: () => setState(() => _isLogin = !_isLogin),
                       child: Text(_isLogin ? "New here? Create Account" : "Already have account? Login", style: const TextStyle(color: Colors.white70)),
                     ),
+                    const SizedBox(height: 20),
+                    const Divider(color: Colors.white10),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        onPressed: _submitGuest,
+                        icon: const Icon(Icons.visibility_outlined, color: Colors.orange, size: 20),
+                        label: Text('GUEST EXPLORATION', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 16, letterSpacing: 1.5)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.orange, width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -193,6 +209,17 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ),
     );
+  }
+
+  void _submitGuest() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.loginAsGuest();
+    
+    if (mounted) {
+      Provider.of<BallProvider>(context, listen: false).init(force: true);
+      Provider.of<ContributionProvider>(context, listen: false).fetchContributions(force: true);
+      Provider.of<InventoryProvider>(context, listen: false).fetchInventory(force: true);
+    }
   }
 
   Widget _buildInput(TextEditingController ctrl, String label, IconData icon, {bool isPass = false, TextInputType? keyboard}) {

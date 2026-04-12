@@ -174,6 +174,7 @@ class BallProvider with ChangeNotifier {
     required int lostCount,
     required DateTime date,
     required String recordedBy,
+    String note = '',
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -186,6 +187,7 @@ class BallProvider with ChangeNotifier {
         date: date,
         recordedBy: recordedBy,
         monthYear: DateFormat('MM-yyyy').format(date),
+        note: note,
       );
 
       await DatabaseService().addRecord(record);
@@ -238,6 +240,7 @@ class BallProvider with ChangeNotifier {
     required String playerName,
     required int lostCount,
     required String recordedBy,
+    String note = '',
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -257,6 +260,7 @@ class BallProvider with ChangeNotifier {
         date: now,
         recordedBy: recordedBy,
         monthYear: DateFormat('MM-yyyy').format(now),
+        note: note,
       );
 
       await DatabaseService().addRecord(record);
@@ -310,6 +314,34 @@ class BallProvider with ChangeNotifier {
       await fetchPlayers();
     } catch (e) {
       debugPrint('Add Player Error: $e');
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> deletePlayer(String id, String phone) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await DatabaseService().deletePlayer(id, phone);
+      await fetchPlayers();
+    } catch (e) {
+      debugPrint('Delete Player Error: $e');
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> updateRecord(BallRecord record, int oldCount) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await DatabaseService().updateRecord(record, oldCount);
+      await fetchPlayers();
+      await fetchTodayRecords();
+      await fetchAllRecords();
+    } catch (e) {
+      debugPrint('Update Record Error: $e');
     }
     _isLoading = false;
     notifyListeners();

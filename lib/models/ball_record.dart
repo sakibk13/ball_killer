@@ -8,6 +8,7 @@ class BallRecord {
   final DateTime date;
   final String monthYear;
   final String recordedBy;
+  final String note;
 
   BallRecord({
     this.id,
@@ -17,6 +18,7 @@ class BallRecord {
     required this.date,
     required this.monthYear,
     required this.recordedBy,
+    this.note = '',
   });
 
   Map<String, dynamic> toMap() {
@@ -27,6 +29,7 @@ class BallRecord {
       'date': Timestamp.fromDate(date),
       'monthYear': monthYear,
       'recordedBy': recordedBy,
+      'note': note,
     };
   }
 
@@ -39,6 +42,7 @@ class BallRecord {
       date: (map['date'] as Timestamp).toDate(),
       monthYear: map['monthYear'] ?? '',
       recordedBy: map['recordedBy'] ?? '',
+      note: map['note'] ?? '',
     );
   }
 }

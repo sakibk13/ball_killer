@@ -46,6 +46,23 @@ class InventoryProvider with ChangeNotifier {
     return success;
   }
 
+  Future<bool> updateInventory(Inventory inventory) async {
+    _isLoading = true;
+    notifyListeners();
+    bool success = false;
+    try {
+      success = await DatabaseService().updateInventory(inventory);
+      if (success) {
+        await refresh();
+      }
+    } catch (e) {
+      debugPrint('Update Inventory Error: $e');
+    }
+    _isLoading = false;
+    notifyListeners();
+    return success;
+  }
+
   Future<void> deleteInventory(String id) async {
     _isLoading = true;
     notifyListeners();
@@ -60,27 +77,41 @@ class InventoryProvider with ChangeNotifier {
   }
 
   Map<String, Map<String, int>> getMonthlyTotals() {
-    Map<String, Map<String, int>> totals = {}; // { "MM-yyyy": { "bought": X, "tape": Y, "lost": Z } }
+    Map<String, Map<String, int>> totals = {
+      "Overall": {"bought": 0, "tape": 0, "taken": 0, "totalLost": 0, "unin": 0, "player": 0}
+    };
     
     for (var item in _inventoryList) {
       if (!totals.containsKey(item.monthYear)) {
-        totals[item.monthYear] = {"bought": 0, "tape": 0, "lost": 0};
+        totals[item.monthYear] = {"bought": 0, "tape": 0, "taken": 0, "totalLost": 0, "unin": 0, "player": 0};
       }
       if (!item.isStockUpdate) {
+        // Add to specific month
         totals[item.monthYear]!["bought"] = totals[item.monthYear]!["bought"]! + item.ballsBrought;
         totals[item.monthYear]!["tape"] = totals[item.monthYear]!["tape"]! + item.tapesBrought;
-        totals[item.monthYear]!["lost"] = totals[item.monthYear]!["lost"]! + item.ballsLost;
+        totals[item.monthYear]!["taken"] = totals[item.monthYear]!["taken"]! + item.ballsTaken;
+        totals[item.monthYear]!["totalLost"] = totals[item.monthYear]!["totalLost"]! + item.totalLost;
+        totals[item.monthYear]!["unin"] = totals[item.monthYear]!["unin"]! + item.uninteniollyLost;
+        totals[item.monthYear]!["player"] = totals[item.monthYear]!["player"]! + item.playerLost;
+
+        // Add to Overall
+        totals["Overall"]!["bought"] = totals["Overall"]!["bought"]! + item.ballsBrought;
+        totals["Overall"]!["tape"] = totals["Overall"]!["tape"]! + item.tapesBrought;
+        totals["Overall"]!["taken"] = totals["Overall"]!["taken"]! + item.ballsTaken;
+        totals["Overall"]!["totalLost"] = totals["Overall"]!["totalLost"]! + item.totalLost;
+        totals["Overall"]!["unin"] = totals["Overall"]!["unin"]! + item.uninteniollyLost;
+        totals["Overall"]!["player"] = totals["Overall"]!["player"]! + item.playerLost;
       }
     }
     return totals;
   }
 
-  // Stock is now completely manual. 
-  // It returns the totalStock from the LATEST 'isStockUpdate' entry.
+  // Calculate stock dynamically: 
+  // Latest Manual Stock Update - Sum(Total Lost) since that manual update.
+  // Note: 'Bought' is now separate and doesn't auto-increase stock unless user does a manual reset.
   int getCumulativeRemaining(String upToMonthYear) {
     if (_inventoryList.isEmpty) return 0;
 
-    // Filter list by date limit
     List<Inventory> filtered = _inventoryList;
     if (upToMonthYear != 'Overall') {
       try {
@@ -94,14 +125,27 @@ class InventoryProvider with ChangeNotifier {
 
     if (filtered.isEmpty) return 0;
 
-    // Find the latest manual stock update entry
-    List<Inventory> stockUpdates = filtered.where((item) => item.isStockUpdate).toList();
-    if (stockUpdates.isEmpty) return 0;
+    List<Inventory> sorted = List.from(filtered);
+    sorted.sort((a, b) => a.date.compareTo(b.date));
 
-    // Sort by date descending to get the latest
-    stockUpdates.sort((a, b) => b.date.compareTo(a.date));
+    int currentStock = 0;
     
-    return stockUpdates.first.totalStock;
+    for (var item in sorted) {
+      if (item.isStockUpdate) {
+        currentStock = item.totalStock;
+      }
+      // Note: totalLost is no longer deducted automatically as per user request
+    }
+    
+    return currentStock;
+  }
+
+  int getUninteniollyLostForMonth(String monthYear) {
+    final totals = getMonthlyTotals();
+    if (monthYear == 'Overall') {
+      return totals.values.fold(0, (sum, m) => sum + (m['unin'] ?? 0));
+    }
+    return totals[monthYear]?['unin'] ?? 0;
   }
 
   List<Inventory> getItemsForMonth(String monthYear) {
