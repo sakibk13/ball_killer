@@ -36,7 +36,8 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
     super.initState();
     _generateMonthList();
     _isAdmin = Provider.of<AuthProvider>(context, listen: false).isAdmin;
-    _tabController = TabController(length: _isAdmin ? 3 : 2, vsync: this);
+    // Only 1 tab for non-admins (SUMMARY), 3 for admins
+    _tabController = TabController(length: _isAdmin ? 3 : 1, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<InventoryProvider>(context, listen: false).fetchInventory();
       Provider.of<BallProvider>(context, listen: false).init();
@@ -236,7 +237,6 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                         int tapesBrought = _isStockUpdate ? 0 : (int.tryParse(_tapeBoughtController.text) ?? 0);
                         int ballsTaken = _isStockUpdate ? 0 : (int.tryParse(_ballTakenController.text) ?? 0);
                         
-                        // New Logic: Input is playerLost and uninteniollyLost
                         int playerLost = _isStockUpdate ? 0 : (int.tryParse(_totalLostController.text) ?? 0);
                         int uninteniollyLost = _isStockUpdate ? 0 : (int.tryParse(_uninteniollyLostController.text) ?? 0);
                         int totalLost = playerLost + uninteniollyLost;
@@ -328,7 +328,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
     return Scaffold(
       backgroundColor: const Color(0xFF051970),
       appBar: AppBar(
-        title: Text('INVENTORY SYSTEM', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 24, letterSpacing: 1.5)),
+        title: Text('STOCK LOG', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 24, letterSpacing: 1.5)),
         backgroundColor: const Color(0xFF020C3B), elevation: 0,
         bottom: TabBar(
           controller: _tabController, 
@@ -338,7 +338,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           labelStyle: GoogleFonts.bebasNeue(fontSize: 14, letterSpacing: 1),
           tabs: [
             const Tab(text: 'SUMMARY'),
-            const Tab(text: 'HISTORY'),
+            if (_isAdmin) const Tab(text: 'HISTORY'),
             if (_isAdmin) const Tab(text: 'MANAGE'),
           ],
         ),
@@ -353,7 +353,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           controller: _tabController,
           children: [ 
             _buildSummary(invProvider, ballProvider), 
-            _buildHistory(invProvider),
+            if (_isAdmin) _buildHistory(invProvider),
             if (_isAdmin) _buildManageTab(invProvider),
           ],
         ),
@@ -427,7 +427,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
   }
 
   Widget _buildSummary(InventoryProvider inv, BallProvider ball) {
-    final totals = inv.getMonthlyTotals()[_selectedMonthYear] ?? {'bought': 0, 'tape': 0, 'taken': 0, 'totalLost': 0, 'unin': 0};
+    final totals = inv.getMonthlyTotals()[_selectedMonthYear] ?? {'bought': 0, 'tape': 0, 'taken': 0, 'totalLost': 0, 'unin': 0, 'player': 0};
     final remaining = inv.getCumulativeRemaining(_selectedMonthYear);
 
     return SingleChildScrollView(
@@ -438,7 +438,9 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           _buildMonthPicker(),
           const SizedBox(height: 25),
           
-          // Row 1: BOUGHT & TAPES
+          _buildStockNotice(totals['totalLost'] ?? 0, totals['player'] ?? 0, totals['unin'] ?? 0),
+          const SizedBox(height: 25),
+
           Row(
             children: [
               Expanded(child: _buildStatCard('BOUGHT', '${totals['bought']}', Colors.blue, Icons.shopping_bag)),
@@ -448,7 +450,6 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           ),
           const SizedBox(height: 15),
           
-          // Row 2: TOTAL LOST & STOCK
           Row(
             children: [
               Expanded(child: _buildStatCard('TOTAL LOST', '${totals['totalLost']}', Colors.redAccent, Icons.auto_delete)),
@@ -457,19 +458,70 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
             ],
           ),
           
-          const SizedBox(height: 35),
-          Row(
-            children: [ 
-              Container(width: 4, height: 20, color: Colors.orange), 
-              const SizedBox(width: 10), 
-              Text('MONTHLY DATA LOG', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 18, letterSpacing: 1)) 
-            ],
-          ),
-          const SizedBox(height: 15),
-          _buildTable(inv.getItemsForMonth(_selectedMonthYear)),
+          if (_isAdmin) ...[
+            const SizedBox(height: 35),
+            Row(
+              children: [ 
+                Container(width: 4, height: 20, color: Colors.orange), 
+                const SizedBox(width: 10), 
+                Text('MONTHLY DATA LOG', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 18, letterSpacing: 1)) 
+              ],
+            ),
+            const SizedBox(height: 15),
+            _buildTable(inv.getItemsForMonth(_selectedMonthYear)),
+          ],
           const SizedBox(height: 100),
         ],
       ),
+    );
+  }
+
+  Widget _buildStockNotice(int total, int player, int unin) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.info_outline_rounded, color: Colors.orange, size: 20),
+              const SizedBox(width: 10),
+              Text('LOSS BREAKDOWN NOTICE', style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 18, letterSpacing: 1.2)),
+            ],
+          ),
+          const SizedBox(height: 15),
+          Text(
+            'The total lost count ($total) is the combined value of players responsible loss ($player) and unintentional/ground loss ($unin).',
+            style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _noticeDetail('PLAYER LOST', player, Colors.orangeAccent),
+              const Text('+', style: TextStyle(color: Colors.white24, fontSize: 20)),
+              _noticeDetail('UNINTENTIONAL', unin, Colors.redAccent),
+              const Text('=', style: TextStyle(color: Colors.white24, fontSize: 20)),
+              _noticeDetail('TOTAL LOST', total, Colors.white),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _noticeDetail(String label, int val, Color color) {
+    return Column(
+      children: [
+        Text(label, style: GoogleFonts.bebasNeue(color: Colors.white38, fontSize: 10)),
+        Text('$val', style: GoogleFonts.bebasNeue(color: color, fontSize: 24)),
+      ],
     );
   }
 
@@ -591,7 +643,6 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           ),
           child: Column(
             children: [
-              // Header
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
@@ -664,7 +715,6 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                 ),
               ),
               
-              // Footer
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 decoration: BoxDecoration(
