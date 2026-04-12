@@ -33,7 +33,7 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
   void initState() {
     super.initState();
     _generateMonthList();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _selectedPlayer = widget.initialPlayer;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<BallProvider>(context, listen: false).init();
@@ -109,7 +109,8 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
           labelStyle: GoogleFonts.bebasNeue(fontSize: 14, letterSpacing: 1),
           tabs: [
             const Tab(text: 'RECORD'),
-            const Tab(text: 'HISTORY & MANAGE'),
+            const Tab(text: 'HISTORY'),
+            const Tab(text: 'MANAGE'),
           ],
         ),
       ),
@@ -121,15 +122,16 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
         child: TabBarView(
           controller: _tabController,
           children: [
-            _buildRecordLossTab(filteredPlayers, ballProvider),
-            _buildHistoryTab(ballProvider.allRecords, ballProvider),
+            _buildRecordTab(filteredPlayers, ballProvider),
+            _buildHistoryTab(ballProvider.allRecords),
+            _buildManageTab(ballProvider.allRecords, ballProvider),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildRecordLossTab(List<Player> filteredPlayers, BallProvider ballProvider) {
+  Widget _buildRecordTab(List<Player> filteredPlayers, BallProvider ballProvider) {
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(20),
@@ -145,17 +147,13 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
           _buildLogInputs(),
           const SizedBox(height: 30),
           _buildSaveButton(ballProvider.isLoading),
-          const SizedBox(height: 40),
-          _buildSectionHeader('RECENT RECORDS'),
-          const SizedBox(height: 15),
-          _buildRecentRecordsList(ballProvider.allRecords, ballProvider),
           const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _buildHistoryTab(List<BallRecord> allRecords, BallProvider provider) {
+  Widget _buildHistoryTab(List<BallRecord> allRecords) {
     final filteredRecords = _selectedMonthYear == 'Overall' 
         ? allRecords 
         : allRecords.where((r) => r.monthYear == _selectedMonthYear).toList();
@@ -182,7 +180,7 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
         _buildStatsHeader(totalLost),
         Expanded(
           child: monthKeys.isEmpty 
-            ? Center(child: Text('No data for selected period', style: GoogleFonts.poppins(color: Colors.white24)))
+            ? Center(child: Text('No history found', style: GoogleFonts.poppins(color: Colors.white24)))
             : ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: monthKeys.length,
@@ -215,12 +213,11 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
                             color: const Color(0xFF020C3B),
                             borderRadius: BorderRadius.circular(24),
                             border: Border.all(color: Colors.white.withOpacity(0.08)),
-                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
                           ),
                           child: Column(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withOpacity(0.04),
                                   borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -228,169 +225,29 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                                          child: const Icon(Icons.calendar_today, color: Colors.orange, size: 18),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(DateFormat('EEEE').format(date).toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 14, letterSpacing: 1)),
-                                            Text(DateFormat('dd MMMM').format(date), style: GoogleFonts.poppins(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(colors: [Colors.redAccent.withOpacity(0.2), Colors.redAccent.withOpacity(0.05)]),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Text('TOTAL LOST', style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 10, letterSpacing: 0.5)),
-                                          Text('$dailyTotal', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 20)),
-                                        ],
-                                      ),
-                                    ),
+                                    Text(DateFormat('EEEE, dd MMMM').format(date).toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 14, letterSpacing: 1)),
+                                    Text('TOTAL: $dailyTotal', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 14)),
                                   ],
                                 ),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.white.withOpacity(0.05)),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.03),
-                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(child: Text('NAME & NOTE', style: GoogleFonts.bebasNeue(color: Colors.white38, fontSize: 13, letterSpacing: 1))),
-                                            Text('BALLS', style: GoogleFonts.bebasNeue(color: Colors.white38, fontSize: 13, letterSpacing: 1)),
-                                            const SizedBox(width: 60), // Space for actions
-                                          ],
-                                        ),
-                                      ),
-                                      const Divider(color: Colors.white10, height: 1),
-                                      ListView.separated(
-                                        shrinkWrap: true,
-                                        physics: const NeverScrollableScrollPhysics(),
-                                        itemCount: dayRecords.fold<Map<String, BallRecord>>({}, (map, r) {
-                                          if (map.containsKey(r.playerName)) {
-                                            map[r.playerName] = BallRecord(
-                                              id: map[r.playerName]!.id, // Keep one of the IDs
-                                              playerId: map[r.playerName]!.playerId,
-                                              playerName: r.playerName,
-                                              lostCount: map[r.playerName]!.lostCount + r.lostCount,
-                                              date: r.date,
-                                              monthYear: r.monthYear,
-                                              recordedBy: r.recordedBy,
-                                              note: "${map[r.playerName]!.note}${map[r.playerName]!.note.isNotEmpty && r.note.isNotEmpty ? ', ' : ''}${r.note}",
-                                            );
-                                          } else {
-                                            map[r.playerName] = r;
-                                          }
-                                          return map;
-                                        }).values.length,
-                                        separatorBuilder: (context, i) => Divider(color: Colors.white.withOpacity(0.03), height: 1),
-                                        itemBuilder: (context, i) {
-                                          final aggregatedRecords = dayRecords.fold<Map<String, BallRecord>>({}, (map, r) {
-                                            if (map.containsKey(r.playerName)) {
-                                              map[r.playerName] = BallRecord(
-                                                id: map[r.playerName]!.id,
-                                                playerId: map[r.playerName]!.playerId,
-                                                playerName: r.playerName,
-                                                lostCount: map[r.playerName]!.lostCount + r.lostCount,
-                                                date: r.date,
-                                                monthYear: r.monthYear,
-                                                recordedBy: r.recordedBy,
-                                                note: "${map[r.playerName]!.note}${map[r.playerName]!.note.isNotEmpty && r.note.isNotEmpty ? ', ' : ''}${r.note}",
-                                              );
-                                            } else {
-                                              map[r.playerName] = r;
-                                            }
-                                            return map;
-                                          }).values.toList();
-                                          
-                                          final r = aggregatedRecords[i];
-                                          return Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                            child: Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Row(
-                                                        children: [
-                                                          CircleAvatar(
-                                                            radius: 10,
-                                                            backgroundColor: Colors.orange.withOpacity(0.1),
-                                                            child: Text(r.playerName[0].toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 10)),
-                                                          ),
-                                                          const SizedBox(width: 8),
-                                                          Text(r.playerName.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.bold)),
-                                                        ],
-                                                      ),
-                                                      if (r.note.isNotEmpty)
-                                                        Padding(
-                                                          padding: const EdgeInsets.only(left: 28, top: 4),
-                                                          child: Text(r.note, style: const TextStyle(color: Colors.white38, fontSize: 10, fontStyle: FontStyle.italic)),
-                                                        ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: (r.lostCount >= 0 ? Colors.redAccent : Colors.greenAccent).withOpacity(0.1), 
-                                                    borderRadius: BorderRadius.circular(8)
-                                                  ),
-                                                  child: Text('${r.lostCount > 0 ? "+" : ""}${r.lostCount}', style: GoogleFonts.bebasNeue(color: r.lostCount >= 0 ? Colors.redAccent : Colors.greenAccent, fontSize: 16)),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    // Note: We show actions only if it's not aggregated or we just allow editing the first one
-                                                    IconButton(
-                                                      icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent, size: 16),
-                                                      onPressed: () => _showEditDialog(r, provider),
-                                                      padding: EdgeInsets.zero,
-                                                      constraints: const BoxConstraints(),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    IconButton(
-                                                      icon: const Icon(Icons.delete_outline, color: Colors.white24, size: 16),
-                                                      onPressed: () => _showDeleteConfirm(r, provider),
-                                                      padding: EdgeInsets.zero,
-                                                      constraints: const BoxConstraints(),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: dayRecords.length,
+                                itemBuilder: (context, i) {
+                                  final r = dayRecords[i];
+                                  return ListTile(
+                                    dense: true,
+                                    title: Row(
+                                      children: [
+                                        Text(r.playerName.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                        const Spacer(),
+                                        Text('${r.lostCount > 0 ? "+" : ""}${r.lostCount}', style: GoogleFonts.bebasNeue(color: r.lostCount >= 0 ? Colors.redAccent : Colors.greenAccent, fontSize: 16)),
+                                      ],
+                                    ),
+                                    subtitle: r.note.isNotEmpty ? Text(r.note, style: const TextStyle(color: Colors.white38, fontSize: 10, fontStyle: FontStyle.italic)) : null,
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -402,6 +259,17 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
               ),
         ),
       ],
+    );
+  }
+
+  Widget _buildManageTab(List<BallRecord> records, BallProvider provider) {
+    if (records.isEmpty) {
+      return Center(child: Text('No records found', style: GoogleFonts.poppins(color: Colors.white24)));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: records.length,
+      itemBuilder: (context, i) => _buildRecordCard(records[i], provider, true),
     );
   }
 
@@ -442,38 +310,19 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
   Widget _buildStatsHeader(int total) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-      decoration: const BoxDecoration(color: Color(0xFF020C3B), borderRadius: BorderRadius.vertical(bottom: Radius.circular(30))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 24),
+      decoration: const BoxDecoration(color: Color(0xFF020C3B)),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text('TOTAL BALLS LOST', style: GoogleFonts.bebasNeue(color: Colors.white38, fontSize: 14, letterSpacing: 1.2)),
-          Row(
-            children: [
-              Text('$total', style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 40)),
-              const SizedBox(width: 8),
-              const Icon(Icons.auto_delete, color: Colors.redAccent, size: 28),
-            ],
-          ),
+          Text('$total', style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 24)),
         ],
       ),
     );
   }
 
-  Widget _buildRecentRecordsList(List<BallRecord> records, BallProvider provider) {
-    final recent = records.take(10).toList();
-    if (recent.isEmpty) {
-      return Center(child: Text('No records found.', style: TextStyle(color: Colors.white24, fontSize: 12)));
-    }
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: recent.length,
-      itemBuilder: (context, i) => _buildRecordCard(recent[i], provider, false),
-    );
-  }
-
-  Widget _buildRecordCard(BallRecord r, BallProvider? provider, bool showActions) {
+  Widget _buildRecordCard(BallRecord r, BallProvider provider, bool showActions) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -501,14 +350,13 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
               ],
             ),
           ),
-          if (showActions && provider != null)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent, size: 20), onPressed: () => _showEditDialog(r, provider)),
-                IconButton(icon: const Icon(Icons.delete_outline, color: Colors.white24, size: 20), onPressed: () => _showDeleteConfirm(r, provider)),
-              ],
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent, size: 20), onPressed: () => _showEditDialog(r, provider)),
+              IconButton(icon: const Icon(Icons.delete_outline, color: Colors.white24, size: 20), onPressed: () => _showDeleteConfirm(r, provider)),
+            ],
+          ),
         ],
       ),
     );

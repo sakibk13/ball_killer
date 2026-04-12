@@ -101,6 +101,14 @@ class _RecordsScreenState extends State<RecordsScreen> {
                             final date = DateTime.parse(dateStr);
                             final dailyTotal = dayRecords.fold(0, (sum, r) => sum + r.lostCount);
 
+                            // AGGREGATE PLAYER RECORDS FOR THIS DAY
+                            Map<String, int> playerAggregated = {};
+                            for (var r in dayRecords) {
+                              playerAggregated[r.playerName] = (playerAggregated[r.playerName] ?? 0) + r.lostCount;
+                            }
+                            final aggregatedList = playerAggregated.entries.toList()
+                              ..sort((a, b) => b.value.compareTo(a.value));
+
                             return Container(
                               margin: const EdgeInsets.only(bottom: 24),
                               decoration: BoxDecoration(
@@ -181,10 +189,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                           ListView.separated(
                                             shrinkWrap: true,
                                             physics: const NeverScrollableScrollPhysics(),
-                                            itemCount: dayRecords.length,
+                                            itemCount: aggregatedList.length,
                                             separatorBuilder: (context, i) => Divider(color: Colors.white.withOpacity(0.03), height: 1),
                                             itemBuilder: (context, i) {
-                                              final r = dayRecords[i];
+                                              final entry = aggregatedList[i];
                                               return Padding(
                                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                                 child: Row(
@@ -195,17 +203,17 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                           CircleAvatar(
                                                             radius: 12,
                                                             backgroundColor: Colors.orange.withOpacity(0.1),
-                                                            child: Text(r.playerName[0].toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 12)),
+                                                            child: Text(entry.key[0].toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 12)),
                                                           ),
                                                           const SizedBox(width: 12),
-                                                          Text(r.playerName.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white.withOpacity(0.8), fontSize: 13, fontWeight: FontWeight.w500)),
+                                                          Text(entry.key.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white.withOpacity(0.8), fontSize: 13, fontWeight: FontWeight.w500)),
                                                         ],
                                                       ),
                                                     ),
                                                     Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                                       decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                                                      child: Text('${r.lostCount}', style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 18)),
+                                                      child: Text('${entry.value}', style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 18)),
                                                     ),
                                                   ],
                                                 ),

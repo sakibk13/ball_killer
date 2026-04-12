@@ -164,19 +164,12 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
   Widget _buildStatsGrid(int stock, BallProvider ball, InventoryProvider inv) {
     int lostToday = ball.todayRecords.fold(0, (sum, r) => sum + r.lostCount);
-    int unintentional = inv.getUninteniollyLostForMonth('Overall');
     
-    return Column(
+    return Row(
       children: [
-        Row(
-          children: [
-            Expanded(child: _buildModernStatCard('STOCK COUNT', '$stock', Colors.greenAccent, Icons.inventory_2_outlined)),
-            const SizedBox(width: 15),
-            Expanded(child: _buildModernStatCard('LOST TODAY', '$lostToday', Colors.redAccent, Icons.running_with_errors_outlined)),
-          ],
-        ),
-        const SizedBox(height: 15),
-        _buildModernStatCard('UNINTENTIONAL LOSS (OVERALL)', '$unintentional', Colors.orangeAccent, Icons.warning_amber_rounded, fullWidth: true),
+        Expanded(child: _buildModernStatCard('STOCK COUNT', '$stock', Colors.greenAccent, Icons.inventory_2_outlined)),
+        const SizedBox(width: 15),
+        Expanded(child: _buildModernStatCard('LOST TODAY', '$lostToday', Colors.redAccent, Icons.running_with_errors_outlined)),
       ],
     );
   }
