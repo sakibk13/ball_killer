@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/ball_provider.dart';
 import '../providers/inventory_provider.dart';
@@ -12,6 +13,7 @@ import 'records_screen.dart';
 import 'inventory_screen.dart';
 import 'contribution_screen.dart';
 import 'leaderboard_screen.dart';
+import 'fine_screen.dart';
 import '../utils/status_dialog.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -95,7 +97,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                     const SizedBox(height: 20),
                     _buildHeader(user, photoBytes, authProvider),
                     const SizedBox(height: 30),
-                    _buildStatsGrid(remainingBalls, ballProvider, invProvider),
+                    _buildStatsGrid(remainingBalls, ballProvider, invProvider, isAdmin),
                     const SizedBox(height: 35),
                     Row(
                       children: [
