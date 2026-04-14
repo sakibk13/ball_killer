@@ -96,6 +96,7 @@ class _ManagePlayersScreenState extends State<ManagePlayersScreen> {
                           message: "A new player has been added to the club.", 
                           isSuccess: true, 
                           title: "PLAYER ADDED",
+                          gifAsset: 'assets/added.gif',
                         );
                       }
                     },

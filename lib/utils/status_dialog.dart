@@ -6,6 +6,7 @@ class StatusDialog {
     required String message,
     required bool isSuccess,
     required String title,
+    String? gifAsset, // Optional GIF for specific successes like adding a player
   }) {
     showDialog(
       context: context,
@@ -14,7 +15,7 @@ class StatusDialog {
         child: Material(
           color: Colors.transparent,
           child: Container(
-            width: 300,
+            width: 320,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
             decoration: BoxDecoration(
               color: const Color(0xFF020C3B),
@@ -34,21 +35,31 @@ class StatusDialog {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Icon instead of GIF for faster response
+                // Icon or GIF
                 Container(
-                  width: 100,
-                  height: 100,
+                  width: 120,
+                  height: 120,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(50),
+                    borderRadius: BorderRadius.circular(60),
                     border: Border.all(color: Colors.white10),
                   ),
-                  child: Icon(
-                    isSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
-                    color: isSuccess ? Colors.greenAccent : Colors.redAccent,
-                    size: 60,
-                  ),
-                ),                const SizedBox(height: 30),
+                  child: gifAsset != null && isSuccess
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(60),
+                        child: Image.asset(
+                          gifAsset,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 60),
+                        ),
+                      )
+                    : Icon(
+                        isSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                        color: isSuccess ? Colors.greenAccent : Colors.redAccent,
+                        size: 60,
+                      ),
+                ),
+                const SizedBox(height: 30),
                 Text(
                   title.toUpperCase(),
                   textAlign: TextAlign.center,

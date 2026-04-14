@@ -162,19 +162,47 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildStatsGrid(int stock, BallProvider ball, InventoryProvider inv) {
+  Widget _buildStatsGrid(int stock, BallProvider ball, InventoryProvider inv, bool isAdmin) {
     int lostToday = ball.todayRecords.fold(0, (sum, r) => sum + r.lostCount);
     
-    return Row(
+    // Top player fine calculation for current month
+    final currentMonth = DateFormat('MM-yyyy').format(DateTime.now());
+    final playersWithTotals = ball.getPlayersWithTotals(monthYear: currentMonth);
+    final sortedPlayers = List<Map<String, dynamic>>.from(playersWithTotals)
+      ..sort((a, b) => (b['total'] as int).compareTo(a['total'] as int));
+    
+    final topLost = sortedPlayers.isNotEmpty ? (sortedPlayers.first['total'] as int) : 0;
+    final fine = topLost * 50;
+
+    return Column(
       children: [
-        Expanded(child: _buildModernStatCard('STOCK COUNT', '$stock', Colors.greenAccent, Icons.inventory_2_outlined)),
-        const SizedBox(width: 15),
-        Expanded(child: _buildModernStatCard('LOST TODAY', '$lostToday', Colors.redAccent, Icons.running_with_errors_outlined)),
+        Row(
+          children: [
+            Expanded(child: _buildModernStatCard('STOCK COUNT', '$stock', Colors.greenAccent, Icons.inventory_2_outlined)),
+            const SizedBox(width: 15),
+            Expanded(child: _buildModernStatCard('LOST TODAY', '$lostToday', Colors.redAccent, Icons.running_with_errors_outlined)),
+          ],
+        ),
+        if (isAdmin) ...[
+          const SizedBox(height: 15),
+          InkWell(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FineScreen())),
+            borderRadius: BorderRadius.circular(28),
+            child: _buildModernStatCard(
+              'MONTHLY TOP FINE', 
+              '$fine ৳', 
+              Colors.orangeAccent, 
+              Icons.monetization_on_outlined, 
+              fullWidth: true,
+              subtitle: 'Top Loser: ${sortedPlayers.isNotEmpty ? sortedPlayers.first['name'] : "None"}'
+            ),
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildModernStatCard(String label, String val, Color color, IconData icon, {bool fullWidth = false}) {
+  Widget _buildModernStatCard(String label, String val, Color color, IconData icon, {bool fullWidth = false, String? subtitle}) {
     return Container(
       width: fullWidth ? double.infinity : null,
       padding: const EdgeInsets.all(20),
@@ -191,10 +219,17 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: color, size: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              if (subtitle != null)
+                Text(subtitle, style: GoogleFonts.poppins(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w500)),
+            ],
           ),
           const SizedBox(height: 15),
           Text(val, style: GoogleFonts.bebasNeue(fontSize: 32, color: Colors.white, letterSpacing: 1)),
