@@ -55,6 +55,23 @@ class _FineScreenState extends State<FineScreen> {
         title: Text('PLAYER FINES', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1.2)),
         backgroundColor: const Color(0xFF020C3B),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.orange),
+            onPressed: () {
+              final ballProvider = Provider.of<BallProvider>(context, listen: false);
+              final playersWithTotals = ballProvider.getPlayersWithTotals(monthYear: _selectedMonthYear);
+              final sortedPlayers = List<Map<String, dynamic>>.from(playersWithTotals)
+                ..sort((a, b) => (b['total'] as num).compareTo(a['total'] as num));
+              
+              ExportService.exportFineReport(
+                monthYear: _selectedMonthYear,
+                sortedPlayers: sortedPlayers,
+              );
+            },
+          ),
+          const SizedBox(width: 10),
+        ],
       ),
       body: Column(
         children: [

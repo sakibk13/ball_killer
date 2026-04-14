@@ -51,6 +51,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         backgroundColor: const Color(0xFF020C3B),
         elevation: 0,
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.orange),
+            onPressed: () {
+              final ballProvider = Provider.of<BallProvider>(context, listen: false);
+              final displayData = ballProvider.getMonthlyLeaderboard(_selectedMonthYear);
+              ExportService.exportLeaderboard(
+                monthYear: _selectedMonthYear,
+                players: displayData,
+              );
+            },
+          ),
+          const SizedBox(width: 10),
+        ],
       ),
       body: Column(
         children: [
