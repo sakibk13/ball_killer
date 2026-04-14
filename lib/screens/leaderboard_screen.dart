@@ -58,10 +58,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             onPressed: () {
               final ballProvider = Provider.of<BallProvider>(context, listen: false);
               final displayData = ballProvider.getMonthlyLeaderboard(_selectedMonthYear);
-              ExportService.exportLeaderboard(
-                monthYear: _selectedMonthYear,
-                players: displayData,
-              );
+              if (displayData.isNotEmpty) {
+                ExportService.exportLeaderboard(
+                  monthYear: _selectedMonthYear,
+                  players: displayData,
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No data to export for this month')),
+                );
+              }
             },
           ),
           const SizedBox(width: 10),

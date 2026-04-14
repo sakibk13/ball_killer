@@ -169,7 +169,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                   SwitchListTile(
                     title: const Text('Manual Stock Reset', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     subtitle: const Text('Override all calculations with manual stock', style: TextStyle(color: Colors.white38, fontSize: 11)),
-                    value: _isStockUpdate, activeColor: Colors.orange, contentPadding: EdgeInsets.zero,
+                    value: _isStockUpdate, activeThumbColor: Colors.orange, contentPadding: EdgeInsets.zero,
                     onChanged: (v) => setModalState(() => _isStockUpdate = v),
                   ),
                   const SizedBox(height: 10),

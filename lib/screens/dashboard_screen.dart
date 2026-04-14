@@ -14,7 +14,6 @@ import 'inventory_screen.dart';
 import 'contribution_screen.dart';
 import 'leaderboard_screen.dart';
 import 'fine_screen.dart';
-import '../utils/status_dialog.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});

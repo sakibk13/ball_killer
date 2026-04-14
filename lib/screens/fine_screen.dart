@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/ball_provider.dart';
 import '../utils/export_service.dart';
-import '../models/player.dart';
 
 class FineScreen extends StatefulWidget {
   const FineScreen({super.key});
@@ -121,16 +120,17 @@ class _FineScreenState extends State<FineScreen> {
             onTap: () => setState(() => _selectedMonthYear = m),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              margin: const EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               decoration: BoxDecoration(
                 gradient: isSelected ? const LinearGradient(colors: [Colors.orange, Colors.deepOrange]) : null,
                 color: isSelected ? null : Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: isSelected ? Colors.orange : Colors.white10),
+                boxShadow: isSelected ? [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))] : null,
               ),
               alignment: Alignment.center,
-              child: Text(display, style: GoogleFonts.bebasNeue(color: isSelected ? Colors.white : Colors.white38, fontSize: 14)),
+              child: Text(display, style: GoogleFonts.bebasNeue(color: isSelected ? Colors.white : Colors.white38, fontSize: 16, letterSpacing: 1)),
             ),
           );
         },
@@ -141,16 +141,16 @@ class _FineScreenState extends State<FineScreen> {
   Widget _buildFineCard(Map<String, dynamic> player, int lost, int fine) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(30),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFFB71C1C), Color(0xFFD32F2F)],
+          colors: [Color(0xFFB71C1C), Color(0xFFD32F2F), Color(0xFFC62828)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(35),
         boxShadow: [
-          BoxShadow(color: Colors.red.withOpacity(0.3), blurRadius: 20, spreadRadius: 5)
+          BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 25, spreadRadius: 5)
         ],
       ),
       child: Column(
@@ -158,55 +158,60 @@ class _FineScreenState extends State<FineScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
-                child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 30),
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
+                child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 35),
               ),
-              const SizedBox(width: 15),
+              const SizedBox(width: 20),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('TOP BALL KILLER', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 16, letterSpacing: 1)),
-                    Text('MONTHLY FINE NOTICE', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 24, letterSpacing: 1.2)),
+                    Text('TOP BALL KILLER', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 18, letterSpacing: 1.5)),
+                    Text('MONTHLY FINE NOTICE', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, letterSpacing: 1.5)),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 30),
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: Colors.white24,
-            backgroundImage: player['photoUrl'] != null && player['photoUrl'].isNotEmpty 
-                ? MemoryImage(base64Decode(player['photoUrl'])) 
-                : null,
-            child: player['photoUrl'] == null || player['photoUrl'].isEmpty 
-                ? Text(player['name'][0], style: const TextStyle(color: Colors.white, fontSize: 40)) 
-                : null,
-          ),
-          const SizedBox(height: 15),
-          Text(player['name'].toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, letterSpacing: 1.5)),
-          const SizedBox(height: 25),
+          const SizedBox(height: 35),
           Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white30, width: 2),
+            ),
+            child: CircleAvatar(
+              radius: 55,
+              backgroundColor: Colors.white24,
+              backgroundImage: player['photoUrl'] != null && player['photoUrl'].isNotEmpty 
+                  ? MemoryImage(base64Decode(player['photoUrl'])) 
+                  : null,
+              child: player['photoUrl'] == null || player['photoUrl'].isEmpty 
+                  ? Text(player['name'][0], style: const TextStyle(color: Colors.white, fontSize: 45)) 
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(player['name'].toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 32, letterSpacing: 2)),
+          const SizedBox(height: 30),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+            decoration: BoxDecoration(color: Colors.black.withOpacity(0.25), borderRadius: BorderRadius.circular(25)),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildFineDetail('BALLS LOST', '$lost'),
-                Container(width: 1, height: 40, color: Colors.white10),
-                _buildFineDetail('FINE RATE', '50 ৳'),
-                Container(width: 1, height: 40, color: Colors.white10),
-                _buildFineDetail('TOTAL FINE', '$fine ৳', color: Colors.yellowAccent),
+                _buildFineDetail('FINE RATE', '50 BDT'),
+                _buildFineDetail('TOTAL FINE', '$fine BDT', color: Colors.yellowAccent),
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 25),
           Text(
             '* As per club rules, the top ball killer of the month must pay a fine of 50 Taka per ball lost.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(color: Colors.white60, fontSize: 10, fontStyle: FontStyle.italic),
+            style: GoogleFonts.poppins(color: Colors.white60, fontSize: 11, fontStyle: FontStyle.italic),
           ),
         ],
       ),
@@ -216,8 +221,9 @@ class _FineScreenState extends State<FineScreen> {
   Widget _buildFineDetail(String label, String val, {Color color = Colors.white}) {
     return Column(
       children: [
-        Text(label, style: GoogleFonts.bebasNeue(color: Colors.white38, fontSize: 12)),
-        Text(val, style: GoogleFonts.bebasNeue(color: color, fontSize: 24)),
+        Text(label, style: GoogleFonts.bebasNeue(color: Colors.white38, fontSize: 13, letterSpacing: 1)),
+        const SizedBox(height: 5),
+        Text(val, style: GoogleFonts.bebasNeue(color: color, fontSize: 26)),
       ],
     );
   }
@@ -225,9 +231,9 @@ class _FineScreenState extends State<FineScreen> {
   Widget _buildSectionHeader(String title) {
     return Row(
       children: [
-        Container(width: 4, height: 18, color: Colors.orange),
-        const SizedBox(width: 10),
-        Text(title, style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 18, letterSpacing: 1)),
+        Container(width: 5, height: 22, decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 15),
+        Text(title, style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 22, letterSpacing: 1.5)),
       ],
     );
   }
@@ -241,35 +247,39 @@ class _FineScreenState extends State<FineScreen> {
         final p = players[i];
         final total = p['total'] as int;
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          margin: const EdgeInsets.only(bottom: 15),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: i == 0 ? Colors.redAccent.withOpacity(0.3) : Colors.white10),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: i == 0 ? Colors.redAccent.withOpacity(0.4) : Colors.white10),
           ),
           child: Row(
             children: [
-              Text('${i + 1}', style: GoogleFonts.bebasNeue(color: i == 0 ? Colors.redAccent : Colors.white24, fontSize: 18)),
+              Container(
+                width: 30,
+                alignment: Alignment.center,
+                child: Text('${i + 1}', style: GoogleFonts.bebasNeue(color: i == 0 ? Colors.redAccent : Colors.white24, fontSize: 22)),
+              ),
               const SizedBox(width: 15),
               CircleAvatar(
-                radius: 18,
+                radius: 20,
                 backgroundColor: Colors.white10,
                 backgroundImage: p['photoUrl'] != null && p['photoUrl'].isNotEmpty 
                     ? MemoryImage(base64Decode(p['photoUrl'])) 
                     : null,
-                child: p['photoUrl'] == null || p['photoUrl'].isEmpty ? Text(p['name'][0], style: const TextStyle(color: Colors.orange, fontSize: 12)) : null,
+                child: p['photoUrl'] == null || p['photoUrl'].isEmpty ? Text(p['name'][0], style: const TextStyle(color: Colors.orange, fontSize: 14)) : null,
               ),
-              const SizedBox(width: 15),
+              const SizedBox(width: 20),
               Expanded(
-                child: Text(p['name'].toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                child: Text(p['name'].toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('$total BALLS', style: GoogleFonts.bebasNeue(color: i == 0 ? Colors.redAccent : Colors.white70, fontSize: 14)),
-                  if (i == 0 && total > 0)
-                    Text('FINE: ${total * 50} ৳', style: GoogleFonts.bebasNeue(color: Colors.yellowAccent, fontSize: 12)),
+                  Text('$total BALLS', style: GoogleFonts.bebasNeue(color: i == 0 ? Colors.redAccent : Colors.white70, fontSize: 16)),
+                  if (total > 0)
+                    Text('FINE: ${total * 50} BDT', style: GoogleFonts.bebasNeue(color: Colors.yellowAccent, fontSize: 14)),
                 ],
               ),
             ],

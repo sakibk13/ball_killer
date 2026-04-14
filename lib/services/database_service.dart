@@ -13,7 +13,7 @@ class DatabaseService {
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  bool _isConnected = true;
+  final bool _isConnected = true;
   bool get isConnected => _isConnected;
 
   Future<bool> connect() async {

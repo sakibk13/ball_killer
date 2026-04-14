@@ -39,7 +39,11 @@ class BallProvider with ChangeNotifier {
   Future<void> _fetchPlayersNoNotify() async {
     try {
       _players = await DatabaseService().getPlayers();
-      _players.sort((a, b) => b.totalLost.compareTo(a.totalLost)); 
+      _players.sort((a, b) {
+        int cmp = b.totalLost.compareTo(a.totalLost);
+        if (cmp != 0) return cmp;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      }); 
     } catch (e) {
       debugPrint('Fetch Players Error: $e');
     }
@@ -92,7 +96,11 @@ class BallProvider with ChangeNotifier {
       'photoUrl': p.photoUrl,
       'password': p.password,
       'total': monthlyTotals[p.id!] ?? 0,
-    }).toList()..sort((a, b) => (b['total'] as num).compareTo(a['total'] as num));
+    }).toList()..sort((a, b) {
+      int cmp = (b['total'] as num).compareTo(a['total'] as num);
+      if (cmp != 0) return cmp;
+      return (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase());
+    });
   }
 
   List<Map<String, dynamic>> getMonthlyLeaderboard(String monthYear) {
@@ -143,18 +151,7 @@ class BallProvider with ChangeNotifier {
       
       if (insertedPlayer != null) {
         success = true;
-        if (initialLoss > 0) {
-          final now = DateTime.now();
-          final record = BallRecord(
-            playerId: insertedPlayer.id!,
-            playerName: insertedPlayer.name,
-            lostCount: initialLoss,
-            date: now,
-            recordedBy: recordedBy,
-            monthYear: DateFormat('MM-yyyy').format(now),
-          );
-          await DatabaseService().addRecord(record);
-        }
+        // initialLoss is now ignored or guaranteed to be 0 by the UI
       }
       
       await fetchPlayers();

@@ -252,7 +252,7 @@ class _PlayerBallLossScreenState extends State<PlayerBallLossScreen> with Single
                             ],
                           ),
                         );
-                      }).toList(),
+                      }),
                     ],
                   );
                 },
