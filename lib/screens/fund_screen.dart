@@ -55,7 +55,7 @@ class _FundScreenState extends State<FundScreen> {
           Expanded(
             child: fundProvider.isLoading 
                 ? const Center(child: CircularProgressIndicator(color: Colors.orange))
-                : _buildFundList(fundProvider, isAdmin),
+                : _buildCategorizedFundList(fundProvider, isAdmin),
           ),
         ],
       ),
@@ -85,21 +85,15 @@ class _FundScreenState extends State<FundScreen> {
       ),
       child: Column(
         children: [
-          Text('GRAND TOTAL FUND', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 18, letterSpacing: 1.5)),
+          Text('AVAILABLE FUND BALANCE', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 18, letterSpacing: 1.5)),
           const SizedBox(height: 10),
           Text('${total.toInt()} ৳', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 48, letterSpacing: 2)),
-          const SizedBox(height: 5),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-            child: Text('AVAILABLE BALANCE', style: GoogleFonts.poppins(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildFundList(FundProvider provider, bool isAdmin) {
+  Widget _buildCategorizedFundList(FundProvider provider, bool isAdmin) {
     if (provider.funds.isEmpty) {
       return Center(
         child: Column(
@@ -113,93 +107,137 @@ class _FundScreenState extends State<FundScreen> {
       );
     }
 
-    // Group by Date
-    Map<String, List<Fund>> grouped = {};
+    // Group by Month-Year
+    Map<String, List<Fund>> monthGroups = {};
     for (var f in provider.funds) {
-      String dateStr = DateFormat('yyyy-MM-dd').format(f.date);
-      grouped.putIfAbsent(dateStr, () => []);
-      grouped[dateStr]!.add(f);
+      String monthKey = DateFormat('MMMM yyyy').format(f.date);
+      monthGroups.putIfAbsent(monthKey, () => []);
+      monthGroups[monthKey]!.add(f);
     }
-    var dates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    var sortedMonths = monthGroups.keys.toList()..sort((a, b) {
+      DateTime da = DateFormat('MMMM yyyy').parse(a);
+      DateTime db = DateFormat('MMMM yyyy').parse(b);
+      return db.compareTo(da);
+    });
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      itemCount: dates.length,
-      itemBuilder: (context, index) {
-        String dateKey = dates[index];
-        DateTime date = DateTime.parse(dateKey);
-        List<Fund> items = grouped[dateKey]!;
+      itemCount: sortedMonths.length,
+      itemBuilder: (context, mIndex) {
+        String monthName = sortedMonths[mIndex];
+        List<Fund> monthFunds = monthGroups[monthName]!;
         
-        // Calculate daily net total
-        double dailyTotal = items.fold(0, (sum, item) {
-          return item.type == 'EXPENSE' ? sum - item.amount : sum + item.amount;
-        });
+        // Calculate month total
+        double monthNet = monthFunds.fold(0, (sum, f) => f.type == 'EXPENSE' ? sum - f.amount : sum + f.amount);
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 25),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Calendar Card
-              Container(
-                width: 65,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF020C3B), Color(0xFF051970)]),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
-                ),
-                child: Column(
-                  children: [
-                    Text(DateFormat('MMM').format(date).toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 14)),
-                    Text(DateFormat('dd').format(date), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, height: 1)),
-                    const SizedBox(height: 5),
-                    Text('${dailyTotal.toInt()}', style: GoogleFonts.bebasNeue(color: dailyTotal >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: 12)),
-                  ],
-                ),
+        // Group by Date within Month
+        Map<String, List<Fund>> dailyGroups = {};
+        for (var f in monthFunds) {
+          String dateKey = DateFormat('yyyy-MM-dd').format(f.date);
+          dailyGroups.putIfAbsent(dateKey, () => []);
+          dailyGroups[dateKey]!.add(f);
+        }
+        var sortedDates = dailyGroups.keys.toList()..sort((a, b) => b.compareTo(a));
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Month Header
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Row(
+                children: [
+                  Container(width: 4, height: 25, decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: Text(monthName.toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 24, letterSpacing: 1.5)),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10)),
+                    child: Text('NET: ${monthNet.toInt()}', style: GoogleFonts.bebasNeue(color: monthNet >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: 16)),
+                  ),
+                ],
               ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  children: items.map((f) => Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: f.type == 'EXPENSE' ? Colors.redAccent.withOpacity(0.1) : Colors.white10),
+            ),
+            
+            // Daily Items
+            ...sortedDates.map((dateKey) {
+              DateTime date = DateTime.parse(dateKey);
+              List<Fund> items = dailyGroups[dateKey]!;
+              double dailyNet = items.fold(0, (sum, f) => f.type == 'EXPENSE' ? sum - f.amount : sum + f.amount);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 25),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Calendar Card
+                    Container(
+                      width: 65,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF020C3B), Color(0xFF051970)]),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(DateFormat('MMM').format(date).toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 14)),
+                          Text(DateFormat('dd').format(date), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, height: 1)),
+                          const SizedBox(height: 5),
+                          Text('${dailyNet.toInt()}', style: GoogleFonts.bebasNeue(color: dailyNet >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: 11)),
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        children: items.map((f) => Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: f.type == 'EXPENSE' ? Colors.redAccent.withOpacity(0.1) : Colors.white10),
+                          ),
+                          child: Row(
                             children: [
-                              Text(f.name.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                              if (f.note != null && f.note!.isNotEmpty)
-                                Text(f.note!, style: const TextStyle(color: Colors.white38, fontSize: 9)),
-                              Text(f.type, style: TextStyle(color: f.type == 'EXPENSE' ? Colors.redAccent : Colors.greenAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(f.name.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                    if (f.note != null && f.note!.isNotEmpty)
+                                      Text(f.note!, style: const TextStyle(color: Colors.white38, fontSize: 9)),
+                                    Text(f.type, style: TextStyle(color: f.type == 'EXPENSE' ? Colors.redAccent : Colors.greenAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                '${f.type == 'EXPENSE' ? '-' : ''}${f.amount.toInt()} ৳', 
+                                style: GoogleFonts.bebasNeue(color: f.type == 'EXPENSE' ? Colors.redAccent : Colors.greenAccent, fontSize: 18)
+                              ),
+                              if (isAdmin) ...[
+                                const SizedBox(width: 10),
+                                GestureDetector(
+                                  onTap: () => _confirmDeleteFund(context, provider, f),
+                                  child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                                ),
+                              ],
                             ],
                           ),
-                        ),
-                        Text(
-                          '${f.type == 'EXPENSE' ? '-' : ''}${f.amount.toInt()} ৳', 
-                          style: GoogleFonts.bebasNeue(color: f.type == 'EXPENSE' ? Colors.redAccent : Colors.greenAccent, fontSize: 18)
-                        ),
-                        if (isAdmin) ...[
-                          const SizedBox(width: 10),
-                          GestureDetector(
-                            onTap: () => _confirmDeleteFund(context, provider, f),
-                            child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
-                          ),
-                        ],
-                      ],
+                        )).toList(),
+                      ),
                     ),
-                  )).toList(),
+                  ],
                 ),
-              ),
-            ],
-          ),
+              );
+            }).toList(),
+            
+            const Divider(color: Colors.white10, height: 40),
+          ],
         );
       },
     );
@@ -245,7 +283,6 @@ class _FundScreenState extends State<FundScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // INCOME / EXPENSE Toggle
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
@@ -333,7 +370,7 @@ class _FundScreenState extends State<FundScreen> {
                   controller: amountController,
                   keyboardType: TextInputType.number,
                   style: const TextStyle(color: Colors.white),
-                  decoration: _inputDeco('AMOUNT (৳)'),
+                  decoration: _inputDeco('AMOUNT'),
                 ),
                 const SizedBox(height: 15),
                 GestureDetector(

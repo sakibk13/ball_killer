@@ -30,6 +30,7 @@ class _FineScreenState extends State<FineScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<BallProvider>(context, listen: false).init();
       Provider.of<FineProvider>(context, listen: false).fetchPayments();
+      Provider.of<ContributionProvider>(context, listen: false).fetchContributions();
     });
   }
 
@@ -53,27 +54,34 @@ class _FineScreenState extends State<FineScreen> {
     final enrichedPlayers = playersWithTotals.map((p) {
       final String playerId = p['id'];
       final int totalLost = p['total'] as int;
-      final double totalFine = totalLost * 50.0;
+      final double totalFineOwed = totalLost * 50.0;
       
+      // Calculate Total Money Received from this player
       final double directFinePayments = fineProvider.getTotalPaidForPlayer(playerId, _selectedMonthYear);
-      final double fineFromContribs = contributionProvider.contributions
-          .where((c) => c.playerId == playerId && (_selectedMonthYear == 'Overall' || c.monthYear == _selectedMonthYear) && c.isFinePayment)
-          .fold(0.0, (sum, c) => sum + c.taka);
-      
-      final double generalContribs = contributionProvider.contributions
-          .where((c) => c.playerId == playerId && (_selectedMonthYear == 'Overall' || c.monthYear == _selectedMonthYear) && !c.isFinePayment)
+      final double allContributions = contributionProvider.contributions
+          .where((c) => c.playerId == playerId && (_selectedMonthYear == 'Overall' || c.monthYear == _selectedMonthYear))
           .fold(0.0, (sum, c) => sum + c.taka);
 
-      final double totalFineGiven = directFinePayments + fineFromContribs;
-      final double totalEverythingGiven = totalFineGiven + generalContribs;
-      final double due = (totalFine - totalFineGiven).clamp(0, double.infinity);
+      final double totalMoneyGiven = directFinePayments + allContributions;
+      
+      // Calculate Balance Logic
+      double due = 0;
+      double credit = 0;
+      
+      if (totalMoneyGiven >= totalFineOwed) {
+        due = 0;
+        credit = totalMoneyGiven - totalFineOwed;
+      } else {
+        due = totalFineOwed - totalMoneyGiven;
+        credit = 0;
+      }
 
       return {
         ...p,
-        'totalFine': totalFine,
-        'paid': totalFineGiven,
-        'totalGiven': totalEverythingGiven,
+        'totalFine': totalFineOwed,
+        'paid': totalMoneyGiven, 
         'due': due,
+        'surplus': credit,
       };
     }).toList();
 
@@ -81,11 +89,11 @@ class _FineScreenState extends State<FineScreen> {
       ..sort((a, b) => (b['total'] as num).compareTo(a['total'] as num));
 
     final topPlayer = sortedPlayers.isNotEmpty ? sortedPlayers.first : null;
-    final int totalLost = topPlayer != null ? (topPlayer['total'] as int) : 0;
-    final double fineAmount = topPlayer != null ? topPlayer['totalFine'] : 0.0;
-    final double topFineGiven = topPlayer != null ? topPlayer['paid'] : 0.0;
-    final double topTotalGiven = topPlayer != null ? topPlayer['totalGiven'] : 0.0;
+    final int topLost = topPlayer != null ? (topPlayer['total'] as int) : 0;
+    final double topFine = topPlayer != null ? topPlayer['totalFine'] : 0.0;
+    final double topGiven = topPlayer != null ? topPlayer['paid'] : 0.0;
     final double topDue = topPlayer != null ? topPlayer['due'] : 0.0;
+    final double topCredit = topPlayer != null ? topPlayer['surplus'] : 0.0;
 
     return DefaultTabController(
       length: 2,
@@ -128,8 +136,8 @@ class _FineScreenState extends State<FineScreen> {
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
-                        if (topPlayer != null && totalLost > 0) ...[
-                          _buildFineCard(topPlayer, totalLost, fineAmount, topFineGiven, topTotalGiven, topDue),
+                        if (topPlayer != null && (topLost > 0 || topCredit > 0)) ...[
+                          _buildFineCard(topPlayer, topLost, topFine, topGiven, topDue, topCredit),
                           const SizedBox(height: 30),
                           _buildSectionHeader('RANKING ${_selectedMonthYear == 'Overall' ? 'OVERALL' : 'THIS MONTH'}'),
                           const SizedBox(height: 15),
@@ -138,13 +146,12 @@ class _FineScreenState extends State<FineScreen> {
                           const SizedBox(height: 100),
                           const Icon(Icons.verified_user_outlined, color: Colors.greenAccent, size: 80),
                           const SizedBox(height: 20),
-                          Text('NO FINES FOUND', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 24)),
-                          Text('Everything is clear!', style: GoogleFonts.poppins(color: Colors.white38, fontSize: 14)),
+                          Text('EVERYTHING IS CLEAR', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 24)),
                         ],
                       ],
                     ),
                   ),
-                  _buildGivenHistoryTab(fineProvider),
+                  _buildGivenHistoryTab(fineProvider, contributionProvider),
                 ],
               ),
             ),
@@ -195,7 +202,7 @@ class _FineScreenState extends State<FineScreen> {
     );
   }
 
-  Widget _buildFineCard(Map<String, dynamic> player, int lost, double fine, double fineGiven, double totalGiven, double due) {
+  Widget _buildFineCard(Map<String, dynamic> player, int lost, double fine, double given, double due, double credit) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(25),
@@ -224,8 +231,8 @@ class _FineScreenState extends State<FineScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('TOP BALL KILLER', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 16, letterSpacing: 1.5)),
-                    Text('MONTHLY FINE NOTICE', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 24, letterSpacing: 1.5)),
+                    Text('CLUB ACCOUNT STATUS', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 16, letterSpacing: 1.5)),
+                    Text(player['name'].toString().toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 24, letterSpacing: 1.5)),
                   ],
                 ),
               ),
@@ -246,8 +253,6 @@ class _FineScreenState extends State<FineScreen> {
                   : null,
             ),
           ),
-          const SizedBox(height: 15),
-          Text(player['name'].toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, letterSpacing: 2)),
           const SizedBox(height: 25),
           
           Row(
@@ -260,9 +265,9 @@ class _FineScreenState extends State<FineScreen> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _buildSquareDetail('FINE GIVEN', '${fineGiven.toInt()}', Colors.greenAccent.withOpacity(0.1), textCol: Colors.greenAccent)),
+              Expanded(child: _buildSquareDetail('TOTAL GIVEN', '${given.toInt()}', Colors.blueAccent.withOpacity(0.1), textCol: Colors.blueAccent)),
               const SizedBox(width: 10),
-              Expanded(child: _buildSquareDetail('CONTRIB.', '${totalGiven.toInt()}', Colors.blueAccent.withOpacity(0.1), textCol: Colors.blueAccent)),
+              Expanded(child: _buildSquareDetail('CLUB CREDIT', '${credit.toInt()}', Colors.greenAccent.withOpacity(0.1), textCol: Colors.greenAccent)),
             ],
           ),
           const SizedBox(height: 10),
@@ -270,7 +275,7 @@ class _FineScreenState extends State<FineScreen> {
 
           const SizedBox(height: 20),
           Text(
-            '* As per club rules, the top ball killer must pay a fine of 50 Taka per ball lost.',
+            '* Club Credit represents your available balance that automatically covers any fines.',
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(color: Colors.white60, fontSize: 10, fontStyle: FontStyle.italic),
           ),
@@ -315,10 +320,9 @@ class _FineScreenState extends State<FineScreen> {
       itemBuilder: (context, i) {
         final p = players[i];
         final total = p['total'] as int;
-        final fine = p['totalFine'] as double;
-        final fineGiven = p['paid'] as double;
-        final totalGiven = p['totalGiven'] as double;
+        final given = p['paid'] as double;
         final due = p['due'] as double;
+        final credit = p['surplus'] as double;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 15),
@@ -357,20 +361,20 @@ class _FineScreenState extends State<FineScreen> {
                               icon: const Icon(Icons.message_outlined, color: Colors.orange, size: 18),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
-                              onPressed: () => _showCustomSmsDialog(context, p, total, fine, fineGiven, due),
+                              onPressed: () => _showCustomSmsDialog(context, p, total, p['totalFine'], given, due),
                             ),
                           if (Provider.of<AuthProvider>(context, listen: false).isAdmin)
                             const SizedBox(width: 10),
                           Text('$total BALLS', style: GoogleFonts.bebasNeue(color: i == 0 ? Colors.redAccent : Colors.white70, fontSize: 15)),
                         ],
                       ),
-                      if (total > 0)
-                        Text('FINE: ${fine.toInt()}', style: GoogleFonts.bebasNeue(color: Colors.yellowAccent, fontSize: 13)),
+                      if (credit > 0)
+                        Text('CREDIT: ${credit.toInt()}', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 13)),
                     ],
                   ),
                 ],
               ),
-              if (total > 0) ...[
+              if (total > 0 || credit > 0) ...[
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: Divider(color: Colors.white10, height: 1),
@@ -378,9 +382,9 @@ class _FineScreenState extends State<FineScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildMiniStatus('FINE GIVEN', '${fineGiven.toInt()}', Colors.greenAccent),
-                    _buildMiniStatus('TOTAL CONTRIB.', '${totalGiven.toInt()}', Colors.blueAccent),
+                    _buildMiniStatus('GIVEN', '${given.toInt()}', Colors.blueAccent),
                     _buildMiniStatus('DUE', '${due.toInt()}', due > 0 ? Colors.orangeAccent : Colors.greenAccent),
+                    _buildMiniStatus('CREDIT', '${credit.toInt()}', credit > 0 ? Colors.greenAccent : Colors.white10),
                   ],
                 ),
               ],
@@ -462,10 +466,16 @@ class _FineScreenState extends State<FineScreen> {
     );
   }
 
-  Widget _buildGivenHistoryTab(FineProvider fineProvider) {
-    final payments = fineProvider.getPaymentsForMonth(_selectedMonthYear);
+  Widget _buildGivenHistoryTab(FineProvider fineProvider, ContributionProvider contributionProvider) {
+    final directPayments = fineProvider.getPaymentsForMonth(_selectedMonthYear);
+    final contribFines = contributionProvider.contributions
+        .where((c) => (_selectedMonthYear == 'Overall' || c.monthYear == _selectedMonthYear) && c.isFinePayment)
+        .toList();
 
-    if (payments.isEmpty) {
+    final List<dynamic> combinedHistory = [...directPayments, ...contribFines];
+    combinedHistory.sort((a, b) => b.date.compareTo(a.date));
+
+    if (combinedHistory.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -473,14 +483,13 @@ class _FineScreenState extends State<FineScreen> {
             const Icon(Icons.history_edu_outlined, color: Colors.white10, size: 80),
             const SizedBox(height: 20),
             Text('NO GIVEN HISTORY', style: GoogleFonts.bebasNeue(color: Colors.white24, fontSize: 24)),
-            Text('Records will appear here', style: GoogleFonts.poppins(color: Colors.white10, fontSize: 12)),
           ],
         ),
       );
     }
 
-    Map<String, List<FinePayment>> grouped = {};
-    for (var p in payments) {
+    Map<String, List<dynamic>> grouped = {};
+    for (var p in combinedHistory) {
       String dateStr = DateFormat('yyyy-MM-dd').format(p.date);
       grouped.putIfAbsent(dateStr, () => []);
       grouped[dateStr]!.add(p);
@@ -493,7 +502,7 @@ class _FineScreenState extends State<FineScreen> {
       itemBuilder: (context, index) {
         String dateKey = dates[index];
         DateTime date = DateTime.parse(dateKey);
-        List<FinePayment> items = grouped[dateKey]!;
+        List<dynamic> items = grouped[dateKey]!;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 25),
@@ -518,37 +527,49 @@ class _FineScreenState extends State<FineScreen> {
               const SizedBox(width: 15),
               Expanded(
                 child: Column(
-                  children: items.map((p) => Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(p.playerName.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                              if (p.note != null && p.note!.isNotEmpty)
-                                Text(p.note!, style: const TextStyle(color: Colors.white38, fontSize: 9)),
-                            ],
+                  children: items.map((p) {
+                    bool isDirect = p is FinePayment;
+                    String name = isDirect ? p.playerName : p.name;
+                    String note = isDirect ? (p.note ?? "Fine Payment") : "(Via Contrib) ${p.ballTape}";
+                    double amount = isDirect ? p.amountPaid : p.taka;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                Text(note, style: const TextStyle(color: Colors.white38, fontSize: 9)),
+                              ],
+                            ),
                           ),
-                        ),
-                        Text('${p.amountPaid.toInt()}', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 18)),
-                        if (Provider.of<AuthProvider>(context, listen: false).isAdmin) ...[
-                          const SizedBox(width: 10),
-                          GestureDetector(
-                            onTap: () => _confirmDeleteGivenFine(context, fineProvider, p),
-                            child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
-                          ),
+                          Text('${amount.toInt()}', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 18)),
+                          if (Provider.of<AuthProvider>(context, listen: false).isAdmin) ...[
+                            const SizedBox(width: 10),
+                            GestureDetector(
+                              onTap: () {
+                                if (isDirect) {
+                                  _confirmDeleteGivenFine(context, fineProvider, p);
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Delete this via Financials tab')));
+                                }
+                              },
+                              child: Icon(Icons.delete_outline, color: isDirect ? Colors.redAccent : Colors.white10, size: 18),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  )).toList(),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ],
@@ -609,7 +630,7 @@ class _FineScreenState extends State<FineScreen> {
                   Autocomplete<Map<String, dynamic>>(
                     optionsBuilder: (TextEditingValue textEditingValue) {
                       if (textEditingValue.text == '') return const Iterable<Map<String, dynamic>>.empty();
-                      return players.where((p) => (p['total'] as int) > 0 && p['name'].toString().toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                      return players.where((p) => p['name'].toString().toLowerCase().contains(textEditingValue.text.toLowerCase()));
                     },
                     displayStringForOption: (p) => p['name'].toString().toUpperCase(),
                     onSelected: (p) {
@@ -620,7 +641,7 @@ class _FineScreenState extends State<FineScreen> {
                       controller: ctrl,
                       focusNode: focus,
                       style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration('SEARCH PLAYER (with balls lost)'),
+                      decoration: _inputDecoration('SEARCH PLAYER'),
                       validator: (v) => selectedPlayerId == null ? 'Select a player' : null,
                     ),
                     optionsViewBuilder: (ctx, onSelected, options) => Align(
@@ -645,7 +666,7 @@ class _FineScreenState extends State<FineScreen> {
                                   child: p['photoUrl'] == null || p['photoUrl'] == '' ? Text(p['name'][0], style: const TextStyle(fontSize: 10)) : null,
                                 ),
                                 title: Text(p['name'].toString().toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 13)),
-                                subtitle: Text('Lost: ${p['total']} balls', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                subtitle: Text('Total Lost: ${p['total']} balls', style: const TextStyle(color: Colors.white38, fontSize: 10)),
                                 onTap: () => onSelected(p),
                               );
                             },
@@ -723,18 +744,10 @@ class _FineScreenState extends State<FineScreen> {
               onPressed: () async {
                 if (formKey.currentState!.validate() && selectedPlayerId != null) {
                   final amount = double.parse(amountController.text);
-                  final payment = FinePayment(
-                    playerId: selectedPlayerId!,
-                    playerName: selectedPlayerName!,
-                    amountPaid: amount,
-                    date: selectedDate,
-                    note: noteController.text,
-                    monthYear: DateFormat('MM-yyyy').format(selectedDate),
-                  );
                   
-                  final success = await Provider.of<FineProvider>(context, listen: false).addPayment(payment);
+                  bool success = false;
                   
-                  if (success && syncToFinancials) {
+                  if (syncToFinancials) {
                     final contrib = Contribution(
                       playerId: selectedPlayerId,
                       name: selectedPlayerName!,
@@ -744,7 +757,17 @@ class _FineScreenState extends State<FineScreen> {
                       ballTape: "Fine Collection: ${noteController.text}",
                       isFinePayment: true,
                     );
-                    await Provider.of<ContributionProvider>(context, listen: false).addContribution(contrib);
+                    success = await Provider.of<ContributionProvider>(context, listen: false).addContribution(contrib);
+                  } else {
+                    final payment = FinePayment(
+                      playerId: selectedPlayerId!,
+                      playerName: selectedPlayerName!,
+                      amountPaid: amount,
+                      date: selectedDate,
+                      note: noteController.text,
+                      monthYear: DateFormat('MM-yyyy').format(selectedDate),
+                    );
+                    success = await Provider.of<FineProvider>(context, listen: false).addPayment(payment);
                   }
 
                   if (success) {

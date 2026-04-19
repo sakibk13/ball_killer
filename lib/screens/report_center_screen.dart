@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'dart:typed_data';
+import 'package:pdf/widgets.dart' as pw;
 
 import '../providers/ball_provider.dart';
 import '../providers/fine_provider.dart';
@@ -48,7 +49,7 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
     });
   }
 
-  Future<void> _processReports(bool isDownload) async {
+  Future<void> _processReports() async {
     if (_selectedReports.isEmpty) return;
 
     setState(() => _isProcessing = true);
@@ -59,8 +60,8 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
       final contProv = Provider.of<ContributionProvider>(context, listen: false);
       final fundProv = Provider.of<FundProvider>(context, listen: false);
 
-      List<Uint8List> pdfBytes = [];
-      List<String> filenames = [];
+      // Create a SINGLE master PDF document
+      final masterPdf = pw.Document();
 
       for (String id in _selectedReports) {
         final parts = id.split('|');
@@ -69,9 +70,7 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
 
         if (type == 'LEADERBOARD') {
           final players = ballProv.getPlayersWithTotals(monthYear: month);
-          final bytes = await ExportService.generateLeaderboard(monthYear: month, players: players);
-          pdfBytes.add(bytes);
-          filenames.add('leaderboard_${month.replaceAll('-', '_')}.pdf');
+          await ExportService.addLeaderboard(masterPdf, monthYear: month, players: players);
         } 
         else if (type == 'FINE') {
           final playersWithTotals = ballProv.getPlayersWithTotals(monthYear: month);
@@ -83,43 +82,38 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
             final double totalFineGiven = finePaid + contribPaid;
             return {...p, 'totalFine': (p['total'] as int) * 50.0, 'paid': totalFineGiven, 'due': ((p['total'] as int) * 50.0 - totalFineGiven).clamp(0, double.infinity)};
           }).toList();
-          final bytes = await ExportService.generateFineReport(monthYear: month, sortedPlayers: enriched);
-          pdfBytes.add(bytes);
-          filenames.add('fine_report_${month.replaceAll('-', '_')}.pdf');
+          await ExportService.addFineReport(masterPdf, monthYear: month, sortedPlayers: enriched);
         }
         else if (type == 'FIN_SUM') {
           final data = contProv.getGroupedContributions();
           final filtered = month == 'Overall' ? data : (data.containsKey(month) ? {month: data[month]!} : <String, Map<String, double>>{});
-          final bytes = await ExportService.generateFinancialSummaryReport(monthYear: month, data: filtered);
-          pdfBytes.add(bytes);
-          filenames.add('fin_summary_${month.replaceAll('-', '_')}.pdf');
+          await ExportService.addFinancialSummaryReport(masterPdf, monthYear: month, data: filtered);
         }
         else if (type == 'FIN_DET') {
           final list = month == 'Overall' ? contProv.contributions : contProv.contributions.where((c) => c.monthYear == month).toList();
           final payments = month == 'Overall' ? fineProv.payments : fineProv.payments.where((p) => p.monthYear == month).toList();
           final combined = [...list, ...payments]..sort((a, b) => (b as dynamic).date.compareTo((a as dynamic).date));
-          final bytes = await ExportService.generateFinancialDetailedReport(monthYear: month, contributions: combined);
-          pdfBytes.add(bytes);
-          filenames.add('fin_detailed_${month.replaceAll('-', '_')}.pdf');
+          await ExportService.addFinancialDetailedReport(masterPdf, monthYear: month, contributions: combined);
         }
         else if (type == 'FUND') {
-          final bytes = await ExportService.generateFundReport(funds: fundProv.funds, grandTotal: fundProv.grandTotal);
-          pdfBytes.add(bytes);
-          filenames.add('club_fund_report.pdf');
+          await ExportService.addFundReport(masterPdf, funds: fundProv.funds, grandTotal: fundProv.grandTotal);
         }
       }
 
-      if (isDownload) {
-        final path = await ExportService.downloadMultiplePdfs(pdfBytes, filenames);
-        if (mounted) {
-          StatusDialog.show(context, title: "DOWNLOADED", message: "Reports saved to: $path", isSuccess: true);
-        }
-      } else {
-        await ExportService.shareMultiplePdfs(pdfBytes, filenames);
+      // Final bytes of the single merged PDF
+      final Uint8List mergedBytes = await masterPdf.save();
+      
+      // Open standard system dialog (Save / Share)
+      await ExportService.downloadMultiplePdfs([mergedBytes], ['Club_Merged_Report.pdf']);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Select 'Save to device' to download the merged PDF"))
+        );
       }
     } catch (e) {
       if (mounted) {
-        StatusDialog.show(context, title: "ERROR", message: "Failed to process reports: $e", isSuccess: false);
+        StatusDialog.show(context, title: "ERROR", message: "Failed to merge reports: $e", isSuccess: false);
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -169,18 +163,9 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: () => _processReports(true),
-              icon: const Icon(Icons.download_rounded),
-              label: Text('DOWNLOAD (${_selectedReports.length})', style: GoogleFonts.bebasNeue()),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, padding: const EdgeInsets.symmetric(vertical: 15)),
-            ),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _processReports(false),
-              icon: const Icon(Icons.share_rounded),
-              label: Text('SHARE ALL', style: GoogleFonts.bebasNeue()),
+              onPressed: _processReports,
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: Text('MERGE & EXPORT (${_selectedReports.length})', style: GoogleFonts.bebasNeue()),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, padding: const EdgeInsets.symmetric(vertical: 15)),
             ),
           ),
