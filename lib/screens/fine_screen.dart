@@ -135,15 +135,13 @@ class _FineScreenState extends State<FineScreen> {
             ),
           ],
         ),
-        floatingActionButton: Builder(
-          builder: (context) {
-            return FloatingActionButton(
+        floatingActionButton: Provider.of<AuthProvider>(context, listen: false).isAdmin 
+          ? FloatingActionButton(
               onPressed: () => _showAddFineGivenDialog(context, enrichedPlayers),
               backgroundColor: Colors.orange,
               child: const Icon(Icons.add, color: Colors.white),
-            );
-          }
-        ),
+            )
+          : null,
       ),
     );
   }
@@ -242,15 +240,15 @@ class _FineScreenState extends State<FineScreen> {
             children: [
               Expanded(child: _buildSquareDetail('BALLS LOST', '$lost', Colors.white24)),
               const SizedBox(width: 10),
-              Expanded(child: _buildSquareDetail('TOTAL FINE', '${fine.toInt()} ৳', Colors.yellowAccent.withOpacity(0.1), textCol: Colors.yellowAccent)),
+              Expanded(child: _buildSquareDetail('TOTAL FINE', '${fine.toInt()}', Colors.yellowAccent.withOpacity(0.1), textCol: Colors.yellowAccent)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _buildSquareDetail('GIVEN', '${given.toInt()} ৳', Colors.greenAccent.withOpacity(0.1), textCol: Colors.greenAccent)),
+              Expanded(child: _buildSquareDetail('GIVEN', '${given.toInt()}', Colors.greenAccent.withOpacity(0.1), textCol: Colors.greenAccent)),
               const SizedBox(width: 10),
-              Expanded(child: _buildSquareDetail('DUE', '${due.toInt()} ৳', due > 0 ? Colors.orangeAccent.withOpacity(0.1) : Colors.greenAccent.withOpacity(0.1), textCol: due > 0 ? Colors.orangeAccent : Colors.greenAccent)),
+              Expanded(child: _buildSquareDetail('DUE', '${due.toInt()}', due > 0 ? Colors.orangeAccent.withOpacity(0.1) : Colors.greenAccent.withOpacity(0.1), textCol: due > 0 ? Colors.orangeAccent : Colors.greenAccent)),
             ],
           ),
 
@@ -335,7 +333,7 @@ class _FineScreenState extends State<FineScreen> {
                     children: [
                       Text('$total BALLS', style: GoogleFonts.bebasNeue(color: i == 0 ? Colors.redAccent : Colors.white70, fontSize: 15)),
                       if (total > 0)
-                        Text('FINE: ${fine.toInt()} ৳', style: GoogleFonts.bebasNeue(color: Colors.yellowAccent, fontSize: 13)),
+                        Text('FINE: ${fine.toInt()}', style: GoogleFonts.bebasNeue(color: Colors.yellowAccent, fontSize: 13)),
                     ],
                   ),
                 ],
@@ -348,8 +346,8 @@ class _FineScreenState extends State<FineScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildMiniStatus('GIVEN', '${given.toInt()} ৳', Colors.greenAccent),
-                    _buildMiniStatus('DUE', '${due.toInt()} ৳', due > 0 ? Colors.orangeAccent : Colors.greenAccent),
+                    _buildMiniStatus('GIVEN', '${given.toInt()}', Colors.greenAccent),
+                    _buildMiniStatus('DUE', '${due.toInt()}', due > 0 ? Colors.orangeAccent : Colors.greenAccent),
                   ],
                 ),
               ],
@@ -447,12 +445,14 @@ class _FineScreenState extends State<FineScreen> {
                             ],
                           ),
                         ),
-                        Text('${p.amountPaid.toInt()} ৳', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 18)),
-                        const SizedBox(width: 10),
-                        GestureDetector(
-                          onTap: () => _confirmDeleteGivenFine(context, fineProvider, p),
-                          child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
-                        ),
+                        Text('${p.amountPaid.toInt()}', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 18)),
+                        if (Provider.of<AuthProvider>(context, listen: false).isAdmin) ...[
+                          const SizedBox(width: 10),
+                          GestureDetector(
+                            onTap: () => _confirmDeleteGivenFine(context, fineProvider, p),
+                            child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                          ),
+                        ],
                       ],
                     ),
                   )).toList(),

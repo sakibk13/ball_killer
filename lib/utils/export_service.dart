@@ -217,19 +217,19 @@ class ExportService {
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
               columnWidths: {
-                0: const pw.FixedColumnWidth(30), 
-                1: const pw.FixedColumnWidth(40),
-                2: const pw.FlexColumnWidth(), 
-                3: const pw.FixedColumnWidth(60)
+                0: const pw.FixedColumnWidth(25), 
+                1: const pw.FixedColumnWidth(35),
+                2: const pw.FixedColumnWidth(180), 
+                3: const pw.FlexColumnWidth()
               },
               children: [
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.blue900),
                   children: [
-                    _buildHeaderCell('RANK'), 
-                    _buildHeaderCell('PHOTO'),
+                    _buildHeaderCell('RK'), 
+                    _buildHeaderCell('Photo'),
                     _buildHeaderCell('PLAYER NAME'), 
-                    _buildHeaderCell('BALLS LOST'),
+                    _buildHeaderCell('LOST'),
                   ],
                 ),
                 ...sortedPlayers.asMap().entries.map((entry) {
@@ -250,7 +250,7 @@ class ExportService {
                         padding: const pw.EdgeInsets.all(2),
                         child: pw.Center(
                           child: pw.Container(
-                            height: 25, width: 25,
+                            height: 22, width: 22,
                             decoration: pw.BoxDecoration(
                               shape: pw.BoxShape.circle,
                               color: PdfColors.grey200,
@@ -260,7 +260,7 @@ class ExportService {
                           ),
                         ),
                       ),
-                      _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold),
+                      _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold, softWrap: false),
                       _buildDataCell('${p['total']}', align: pw.TextAlign.center, color: i < 3 ? PdfColors.red800 : null, fontWeight: i < 3 ? pw.FontWeight.bold : null),
                     ],
                   );
@@ -308,20 +308,20 @@ class ExportService {
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
               columnWidths: {
-                0: const pw.FixedColumnWidth(25), 
-                1: const pw.FixedColumnWidth(30),
-                2: const pw.FlexColumnWidth(), 
-                3: const pw.FixedColumnWidth(35), 
-                4: const pw.FixedColumnWidth(55),
-                5: const pw.FixedColumnWidth(55),
-                6: const pw.FixedColumnWidth(55),
+                0: const pw.FixedColumnWidth(22), 
+                1: const pw.FixedColumnWidth(32),
+                2: const pw.FixedColumnWidth(160), 
+                3: const pw.FixedColumnWidth(30), 
+                4: const pw.FlexColumnWidth(),
+                5: const pw.FlexColumnWidth(),
+                6: const pw.FlexColumnWidth(),
               },
               children: [
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.blue900),
                   children: [
                     _buildHeaderCell('RK'), 
-                    _buildHeaderCell('DP'),
+                    _buildHeaderCell('Photo'),
                     _buildHeaderCell('PLAYER NAME'), 
                     _buildHeaderCell('LST'), 
                     _buildHeaderCell('TOTAL'),
@@ -348,7 +348,7 @@ class ExportService {
                     children: [
                       _buildDataCell('${i + 1}', align: pw.TextAlign.center),
                       pw.Padding(
-                        padding: const pw.EdgeInsets.all(2),
+                        padding: const pw.EdgeInsets.all(1),
                         child: pw.Center(
                           child: pw.Container(
                             height: 20, width: 20,
@@ -361,18 +361,18 @@ class ExportService {
                           ),
                         ),
                       ),
-                      _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold, fontSize: 7),
+                      _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold, fontSize: 7, softWrap: false),
                       _buildDataCell('$lost', align: pw.TextAlign.center, fontSize: 7),
-                      _buildDataCell('${fine.toInt()}৳', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, fontSize: 7),
-                      _buildDataCell('${given.toInt()}৳', align: pw.TextAlign.right, color: PdfColors.green700, fontSize: 7),
-                      _buildDataCell('${due.toInt()}৳', align: pw.TextAlign.right, color: due > 0 ? PdfColors.red700 : PdfColors.green700, fontWeight: pw.FontWeight.bold, fontSize: 7),
+                      _buildDataCell('${fine.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, fontSize: 7),
+                      _buildDataCell('${given.toInt()}', align: pw.TextAlign.right, color: PdfColors.green700, fontSize: 7),
+                      _buildDataCell('${due.toInt()}', align: pw.TextAlign.right, color: due > 0 ? PdfColors.red700 : PdfColors.green700, fontWeight: pw.FontWeight.bold, fontSize: 7),
                     ],
                   );
                 }),
               ],
             ),
             pw.SizedBox(height: 15),
-            pw.Text('Note: Fines must be paid to the club treasurer.', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+            pw.Text('Note: All amounts are in BDT. Fines must be paid to the club treasurer.', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
           ];
         },
       ),
@@ -426,8 +426,16 @@ class ExportService {
     return pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(text, style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 8)));
   }
 
-  static pw.Widget _buildDataCell(String text, {pw.TextAlign align = pw.TextAlign.left, pw.FontWeight? fontWeight, PdfColor? color, double fontSize = 8}) {
-    return pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(text, textAlign: align, style: pw.TextStyle(fontSize: fontSize, fontWeight: fontWeight, color: color)));
+  static pw.Widget _buildDataCell(String text, {pw.TextAlign align = pw.TextAlign.left, pw.FontWeight? fontWeight, PdfColor? color, double fontSize = 8, bool softWrap = true}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(6), 
+      child: pw.Text(
+        text, 
+        textAlign: align, 
+        softWrap: softWrap,
+        style: pw.TextStyle(fontSize: fontSize, fontWeight: fontWeight, color: color)
+      )
+    );
   }
 
   static Future<void> _saveAndShare(pw.Document pdf, String fileName) async {
