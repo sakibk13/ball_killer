@@ -14,7 +14,8 @@ import '../models/fine_payment.dart';
 import '../models/fund.dart';
 
 class ExportService {
-  static Future<void> exportFundReport({
+  // --- FUND REPORT ---
+  static Future<Uint8List> generateFundReport({
     required List<Fund> funds,
     required double grandTotal,
   }) async {
@@ -82,10 +83,16 @@ class ExportService {
         },
       ),
     );
-    await _saveAndDownload(pdf, 'club_fund_report.pdf');
+    return pdf.save();
   }
 
-  static Future<void> exportFinancialSummaryReport({
+  static Future<void> exportFundReport({required List<Fund> funds, required double grandTotal}) async {
+    final bytes = await generateFundReport(funds: funds, grandTotal: grandTotal);
+    await _saveAndDownload(bytes, 'club_fund_report.pdf');
+  }
+
+  // --- FINANCIAL SUMMARY ---
+  static Future<Uint8List> generateFinancialSummaryReport({
     required String monthYear,
     required Map<String, Map<String, double>> data,
   }) async {
@@ -108,16 +115,10 @@ class ExportService {
         footer: (context) => _buildPdfFooter('Official Financial Summary Document', context.pageNumber),
         build: (pw.Context context) {
           List<pw.Widget> widgets = [];
-          
-          widgets.add(
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('PERIOD: ${dateStr.toUpperCase()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
-                pw.Text('DATE: ${DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: pw.TextStyle(fontSize: 8)),
-              ],
-            ),
-          );
+          widgets.add(pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+            pw.Text('PERIOD: ${dateStr.toUpperCase()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+            pw.Text('DATE: ${DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: pw.TextStyle(fontSize: 8)),
+          ]));
           widgets.add(pw.SizedBox(height: 16));
 
           for (var monthKey in data.keys) {
@@ -125,47 +126,41 @@ class ExportService {
             double monthlyTotal = players.values.fold(0, (s, v) => s + v);
             DateTime date = DateFormat('MM-yyyy').parse(monthKey);
 
-            widgets.add(
-              pw.Container(
-                padding: const pw.EdgeInsets.all(8),
-                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(DateFormat('MMMM yyyy').format(date).toUpperCase(), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
-                    pw.Text('TOTAL: BDT ${monthlyTotal.toInt()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, color: PdfColors.blue800)),
-                  ],
-                ),
-              ),
-            );
+            widgets.add(pw.Container(
+              padding: const pw.EdgeInsets.all(8),
+              decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+              child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+                pw.Text(DateFormat('MMMM yyyy').format(date).toUpperCase(), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                pw.Text('TOTAL: BDT ${monthlyTotal.toInt()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, color: PdfColors.blue800)),
+              ]),
+            ));
 
-            widgets.add(
-              pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
-                columnWidths: {0: const pw.FlexColumnWidth(), 1: const pw.FixedColumnWidth(100)},
-                children: [
-                  ...players.entries.map((e) {
-                    return pw.TableRow(
-                      children: [
-                        _buildDataCell(e.key.toUpperCase()),
-                        _buildDataCell('BDT ${e.value.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold),
-                      ],
-                    );
-                  }),
-                ],
-              ),
-            );
+            widgets.add(pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
+              columnWidths: {0: const pw.FlexColumnWidth(), 1: const pw.FixedColumnWidth(100)},
+              children: [
+                ...players.entries.map((e) => pw.TableRow(children: [
+                  _buildDataCell(e.key.toUpperCase()),
+                  _buildDataCell('${e.value.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold),
+                ])),
+              ],
+            ));
             widgets.add(pw.SizedBox(height: 15));
           }
-
           return widgets;
         },
       ),
     );
-    await _saveAndDownload(pdf, 'financial_summary_${monthYear.replaceAll('-', '_')}.pdf');
+    return pdf.save();
   }
 
-  static Future<void> exportFinancialDetailedReport({
+  static Future<void> exportFinancialSummaryReport({required String monthYear, required Map<String, Map<String, double>> data}) async {
+    final bytes = await generateFinancialSummaryReport(monthYear: monthYear, data: data);
+    await _saveAndDownload(bytes, 'financial_summary_${monthYear.replaceAll('-', '_')}.pdf');
+  }
+
+  // --- FINANCIAL DETAILED ---
+  static Future<Uint8List> generateFinancialDetailedReport({
     required String monthYear,
     required List<dynamic> contributions,
   }) async {
@@ -188,32 +183,18 @@ class ExportService {
         footer: (context) => _buildPdfFooter('Official Financial Transaction History', context.pageNumber),
         build: (pw.Context context) {
           return [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('PERIOD: ${dateStr.toUpperCase()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
-                pw.Text('DATE: ${DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: pw.TextStyle(fontSize: 8)),
-              ],
-            ),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+              pw.Text('PERIOD: ${dateStr.toUpperCase()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+              pw.Text('DATE: ${DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: pw.TextStyle(fontSize: 8)),
+            ]),
             pw.SizedBox(height: 16),
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
-              columnWidths: {
-                0: const pw.FixedColumnWidth(50), 
-                1: const pw.FlexColumnWidth(), 
-                2: const pw.FlexColumnWidth(1.2), 
-                3: const pw.FixedColumnWidth(60)
-              },
+              columnWidths: {0: const pw.FixedColumnWidth(50), 1: const pw.FlexColumnWidth(), 2: const pw.FlexColumnWidth(1.2), 3: const pw.FixedColumnWidth(60)},
               children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.blue900),
-                  children: [
-                    _buildHeaderCell('DATE'), 
-                    _buildHeaderCell('NAME'), 
-                    _buildHeaderCell('NOTE/ITEMS'), 
-                    _buildHeaderCell('AMOUNT'),
-                  ],
-                ),
+                pw.TableRow(decoration: const pw.BoxDecoration(color: PdfColors.blue900), children: [
+                  _buildHeaderCell('DATE'), _buildHeaderCell('NAME'), _buildHeaderCell('NOTE/ITEMS'), _buildHeaderCell('AMOUNT'),
+                ]),
                 ...contributions.map((item) {
                   bool isFine = item is FinePayment;
                   String name = isFine ? item.playerName : (item as Contribution).name;
@@ -222,34 +203,33 @@ class ExportService {
                   double amount = isFine ? item.amountPaid : (item as Contribution).taka;
                   DateTime date = isFine ? item.date : (item as Contribution).date;
 
-                  return pw.TableRow(
-                    children: [
-                      _buildDataCell(DateFormat('dd MMM').format(date)),
-                      _buildDataCell(name.toUpperCase(), fontWeight: pw.FontWeight.bold),
-                      _buildDataCell(note, fontSize: 7, color: isFine ? PdfColors.green800 : null),
-                      _buildDataCell('${amount.toInt()} ৳', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, color: isFine ? PdfColors.green800 : null),
-                    ],
-                  );
+                  return pw.TableRow(children: [
+                    _buildDataCell(DateFormat('dd MMM').format(date)),
+                    _buildDataCell(name.toUpperCase(), fontWeight: pw.FontWeight.bold),
+                    _buildDataCell(note, fontSize: 7, color: isFine ? PdfColors.green800 : null),
+                    _buildDataCell('${amount.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, color: isFine ? PdfColors.green800 : null),
+                  ]);
                 }),
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                  children: [
-                    pw.SizedBox(),
-                    _buildDataCell('TOTAL COLLECTION', fontWeight: pw.FontWeight.bold),
-                    pw.SizedBox(),
-                    _buildDataCell('${contributions.fold(0.0, (s, c) => s + (c is FinePayment ? c.amountPaid : (c as Contribution).taka)).toInt()} ৳', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
-                  ],
-                ),
+                pw.TableRow(decoration: const pw.BoxDecoration(color: PdfColors.grey100), children: [
+                  pw.SizedBox(), _buildDataCell('TOTAL COLLECTION', fontWeight: pw.FontWeight.bold), pw.SizedBox(),
+                  _buildDataCell('${contributions.fold(0.0, (s, c) => s + (c is FinePayment ? c.amountPaid : (c as Contribution).taka)).toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
+                ]),
               ],
             ),
           ];
         },
       ),
     );
-    await _saveAndDownload(pdf, 'financial_detailed_${monthYear.replaceAll('-', '_')}.pdf');
+    return pdf.save();
   }
 
-  static Future<void> exportLeaderboard({
+  static Future<void> exportFinancialDetailedReport({required String monthYear, required List<dynamic> contributions}) async {
+    final bytes = await generateFinancialDetailedReport(monthYear: monthYear, contributions: contributions);
+    await _saveAndDownload(bytes, 'financial_detailed_${monthYear.replaceAll('-', '_')}.pdf');
+  }
+
+  // --- LEADERBOARD ---
+  static Future<Uint8List> generateLeaderboard({
     required String monthYear,
     required List<Map<String, dynamic>> players,
   }) async {
@@ -279,60 +259,34 @@ class ExportService {
         footer: (context) => _buildPdfFooter('Official Leaderboard Ranking', context.pageNumber),
         build: (pw.Context context) {
           return [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('PERIOD: ${dateStr.toUpperCase()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
-                pw.Text('DATE: ${DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: pw.TextStyle(fontSize: 8)),
-              ],
-            ),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+              pw.Text('PERIOD: ${dateStr.toUpperCase()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+              pw.Text('DATE: ${DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: pw.TextStyle(fontSize: 8)),
+            ]),
             pw.SizedBox(height: 16),
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
-              columnWidths: {
-                0: const pw.FlexColumnWidth(1.0), 
-                1: const pw.FlexColumnWidth(1.0),
-                2: const pw.FlexColumnWidth(2.5), 
-                3: const pw.FlexColumnWidth(1.0)
-              },
+              columnWidths: {0: const pw.FlexColumnWidth(1.0), 1: const pw.FlexColumnWidth(1.0), 2: const pw.FlexColumnWidth(2.5), 3: const pw.FlexColumnWidth(1.0)},
               children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.blue900),
-                  children: [
-                    _buildHeaderCell('RANK', align: pw.TextAlign.center), 
-                    _buildHeaderCell('PHOTO', align: pw.TextAlign.center),
-                    _buildHeaderCell('PLAYER NAME'), 
-                    _buildHeaderCell('LOST', align: pw.TextAlign.center),
-                  ],
-                ),
+                pw.TableRow(decoration: const pw.BoxDecoration(color: PdfColors.blue900), children: [
+                  _buildHeaderCell('RANK', align: pw.TextAlign.center), _buildHeaderCell('PHOTO', align: pw.TextAlign.center), _buildHeaderCell('PLAYER NAME'), _buildHeaderCell('LOST', align: pw.TextAlign.center),
+                ]),
                 ...sortedPlayers.asMap().entries.map((entry) {
                   final i = entry.key;
                   final p = entry.value;
                   pw.MemoryImage? playerPhoto;
                   if (p['photoUrl'] != null && p['photoUrl'].isNotEmpty) {
-                    try {
-                      playerPhoto = pw.MemoryImage(base64Decode(p['photoUrl']));
-                    } catch (e) {}
+                    try { playerPhoto = pw.MemoryImage(base64Decode(p['photoUrl'])); } catch (e) {}
                   }
 
                   return pw.TableRow(
                     decoration: pw.BoxDecoration(color: i % 2 == 0 ? PdfColors.white : PdfColors.grey50),
                     children: [
                       _buildDataCell('${i + 1}', align: pw.TextAlign.center),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(3),
-                        child: pw.Center(
-                          child: pw.Container(
-                            height: 25, width: 25,
-                            decoration: pw.BoxDecoration(
-                              shape: pw.BoxShape.circle,
-                              color: PdfColors.grey200,
-                              image: playerPhoto != null ? pw.DecorationImage(image: playerPhoto, fit: pw.BoxFit.cover) : null,
-                            ),
-                            child: playerPhoto == null ? pw.Center(child: pw.Text(p['name'][0].toUpperCase(), style: const pw.TextStyle(fontSize: 8))) : null,
-                          ),
-                        ),
-                      ),
+                      pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Center(child: pw.Container(
+                        height: 25, width: 25, decoration: pw.BoxDecoration(shape: pw.BoxShape.circle, color: PdfColors.grey200, image: playerPhoto != null ? pw.DecorationImage(image: playerPhoto, fit: pw.BoxFit.cover) : null),
+                        child: playerPhoto == null ? pw.Center(child: pw.Text(p['name'][0].toUpperCase(), style: const pw.TextStyle(fontSize: 8))) : null,
+                      ))),
                       _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold, softWrap: false),
                       _buildDataCell('${p['total']}', align: pw.TextAlign.center, color: i < 3 ? PdfColors.red800 : null, fontWeight: i < 3 ? pw.FontWeight.bold : null),
                     ],
@@ -344,10 +298,16 @@ class ExportService {
         },
       ),
     );
-    await _saveAndDownload(pdf, 'leaderboard_${monthYear.replaceAll('-', '_')}.pdf');
+    return pdf.save();
   }
 
-  static Future<void> exportFineReport({
+  static Future<void> exportLeaderboard({required String monthYear, required List<Map<String, dynamic>> players}) async {
+    final bytes = await generateLeaderboard(monthYear: monthYear, players: players);
+    await _saveAndDownload(bytes, 'leaderboard_${monthYear.replaceAll('-', '_')}.pdf');
+  }
+
+  // --- FINE REPORT ---
+  static Future<Uint8List> generateFineReport({
     required String monthYear,
     required List<Map<String, dynamic>> sortedPlayers,
   }) async {
@@ -370,38 +330,18 @@ class ExportService {
         footer: (context) => _buildPdfFooter('Official Fine Record Document', context.pageNumber),
         build: (pw.Context context) {
           return [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('PERIOD: ${dateStr.toUpperCase()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
-                pw.Text('DATE: ${DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: pw.TextStyle(fontSize: 8)),
-              ],
-            ),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+              pw.Text('PERIOD: ${dateStr.toUpperCase()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+              pw.Text('DATE: ${DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: pw.TextStyle(fontSize: 8)),
+            ]),
             pw.SizedBox(height: 16),
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
-              columnWidths: {
-                0: const pw.FlexColumnWidth(1.0), 
-                1: const pw.FlexColumnWidth(1.0),
-                2: const pw.FlexColumnWidth(2.5), 
-                3: const pw.FlexColumnWidth(1.0), 
-                4: const pw.FlexColumnWidth(1.2),
-                5: const pw.FlexColumnWidth(1.2),
-                6: const pw.FlexColumnWidth(1.2),
-              },
+              columnWidths: {0: const pw.FlexColumnWidth(1.0), 1: const pw.FlexColumnWidth(1.0), 2: const pw.FlexColumnWidth(2.5), 3: const pw.FlexColumnWidth(1.0), 4: const pw.FlexColumnWidth(1.2), 5: const pw.FlexColumnWidth(1.2), 6: const pw.FlexColumnWidth(1.2)},
               children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.blue900),
-                  children: [
-                    _buildHeaderCell('RANK', align: pw.TextAlign.center), 
-                    _buildHeaderCell('PHOTO', align: pw.TextAlign.center),
-                    _buildHeaderCell('PLAYER NAME'), 
-                    _buildHeaderCell('LOST', align: pw.TextAlign.center), 
-                    _buildHeaderCell('TOTAL', align: pw.TextAlign.right),
-                    _buildHeaderCell('GIVEN', align: pw.TextAlign.right),
-                    _buildHeaderCell('DUE', align: pw.TextAlign.right),
-                  ],
-                ),
+                pw.TableRow(decoration: const pw.BoxDecoration(color: PdfColors.blue900), children: [
+                  _buildHeaderCell('RANK', align: pw.TextAlign.center), _buildHeaderCell('PHOTO', align: pw.TextAlign.center), _buildHeaderCell('PLAYER NAME'), _buildHeaderCell('LOST', align: pw.TextAlign.center), _buildHeaderCell('TOTAL', align: pw.TextAlign.right), _buildHeaderCell('GIVEN', align: pw.TextAlign.right), _buildHeaderCell('DUE', align: pw.TextAlign.right),
+                ]),
                 ...sortedPlayers.asMap().entries.where((e) => (e.value['total'] as int) > 0).map((entry) {
                   final i = entry.key;
                   final p = entry.value;
@@ -412,35 +352,21 @@ class ExportService {
 
                   pw.MemoryImage? playerPhoto;
                   if (p['photoUrl'] != null && p['photoUrl'].isNotEmpty) {
-                    try {
-                      playerPhoto = pw.MemoryImage(base64Decode(p['photoUrl']));
-                    } catch (e) {}
+                    try { playerPhoto = pw.MemoryImage(base64Decode(p['photoUrl'])); } catch (e) {}
                   }
                   
-                  return pw.TableRow(
-                    children: [
-                      _buildDataCell('${i + 1}', align: pw.TextAlign.center, fontSize: 8),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(2),
-                        child: pw.Center(
-                          child: pw.Container(
-                            height: 20, width: 20,
-                            decoration: pw.BoxDecoration(
-                              shape: pw.BoxShape.circle,
-                              color: PdfColors.grey200,
-                              image: playerPhoto != null ? pw.DecorationImage(image: playerPhoto, fit: pw.BoxFit.cover) : null,
-                            ),
-                            child: playerPhoto == null ? pw.Center(child: pw.Text(p['name'][0].toUpperCase(), style: const pw.TextStyle(fontSize: 6))) : null,
-                          ),
-                        ),
-                      ),
-                      _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold, fontSize: 8, softWrap: false),
-                      _buildDataCell('$lost', align: pw.TextAlign.center, fontSize: 8),
-                      _buildDataCell('${fine.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, fontSize: 8),
-                      _buildDataCell('${given.toInt()}', align: pw.TextAlign.right, color: PdfColors.green700, fontSize: 8),
-                      _buildDataCell('${due.toInt()}', align: pw.TextAlign.right, color: due > 0 ? PdfColors.red700 : PdfColors.green700, fontWeight: pw.FontWeight.bold, fontSize: 8),
-                    ],
-                  );
+                  return pw.TableRow(children: [
+                    _buildDataCell('${i + 1}', align: pw.TextAlign.center, fontSize: 8),
+                    pw.Padding(padding: const pw.EdgeInsets.all(2), child: pw.Center(child: pw.Container(
+                      height: 20, width: 20, decoration: pw.BoxDecoration(shape: pw.BoxShape.circle, color: PdfColors.grey200, image: playerPhoto != null ? pw.DecorationImage(image: playerPhoto, fit: pw.BoxFit.cover) : null),
+                      child: playerPhoto == null ? pw.Center(child: pw.Text(p['name'][0].toUpperCase(), style: const pw.TextStyle(fontSize: 6))) : null,
+                    ))),
+                    _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold, fontSize: 8, softWrap: false),
+                    _buildDataCell('$lost', align: pw.TextAlign.center, fontSize: 8),
+                    _buildDataCell('${fine.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, fontSize: 8),
+                    _buildDataCell('${given.toInt()}', align: pw.TextAlign.right, color: PdfColors.green700, fontSize: 8),
+                    _buildDataCell('${due.toInt()}', align: pw.TextAlign.right, color: due > 0 ? PdfColors.red700 : PdfColors.green700, fontWeight: pw.FontWeight.bold, fontSize: 8),
+                  ]);
                 }),
               ],
             ),
@@ -450,9 +376,15 @@ class ExportService {
         },
       ),
     );
-    await _saveAndDownload(pdf, 'fine_report_${monthYear.replaceAll('-', '_')}.pdf');
+    return pdf.save();
   }
 
+  static Future<void> exportFineReport({required String monthYear, required List<Map<String, dynamic>> sortedPlayers}) async {
+    final bytes = await generateFineReport(monthYear: monthYear, sortedPlayers: sortedPlayers);
+    await _saveAndDownload(bytes, 'fine_report_${monthYear.replaceAll('-', '_')}.pdf');
+  }
+
+  // --- HELPERS ---
   static pw.Widget _buildPdfHeader(String title, pw.MemoryImage? logo) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -519,12 +451,45 @@ class ExportService {
     );
   }
 
-  static Future<void> _saveAndDownload(pw.Document pdf, String fileName) async {
-    // We use Printing.sharePdf because it opens the share sheet which HAS the "Save to Files" (Download) option 
-    // on both iOS and Android. This avoids the system Print dialog.
+  static Future<void> _saveAndDownload(Uint8List bytes, String fileName) async {
+    // Standard sharing for all screens
     await Printing.sharePdf(
-      bytes: await pdf.save(),
+      bytes: bytes,
       filename: fileName,
     );
+  }
+
+  // --- BATCH HELPERS FOR REPORT CENTER ---
+  static Future<void> shareMultiplePdfs(List<Uint8List> pdfs, List<String> filenames) async {
+    final List<XFile> files = [];
+    final tempDir = await getTemporaryDirectory();
+    
+    for (int i = 0; i < pdfs.length; i++) {
+      final file = File('${tempDir.path}/${filenames[i]}');
+      await file.writeAsBytes(pdfs[i]);
+      files.add(XFile(file.path));
+    }
+    
+    if (files.isNotEmpty) {
+      await Share.shareXFiles(files, text: 'Club Reports from Ball Killer');
+    }
+  }
+
+  static Future<String> downloadMultiplePdfs(List<Uint8List> pdfs, List<String> filenames) async {
+    // On Android, we try to save to the Downloads folder.
+    // On iOS, it stays in the App's Documents folder.
+    String path = "";
+    if (Platform.isAndroid) {
+      path = "/storage/emulated/0/Download";
+    } else {
+      final dir = await getApplicationDocumentsDirectory();
+      path = dir.path;
+    }
+
+    for (int i = 0; i < pdfs.length; i++) {
+      final file = File('$path/${filenames[i]}');
+      await file.writeAsBytes(pdfs[i]);
+    }
+    return path;
   }
 }

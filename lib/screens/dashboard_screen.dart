@@ -15,6 +15,7 @@ import 'contribution_screen.dart';
 import 'leaderboard_screen.dart';
 import 'fine_screen.dart';
 import 'fund_screen.dart';
+import 'report_center_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -185,21 +186,19 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             Expanded(child: _buildModernStatCard('LOST TODAY', '$lostToday', Colors.redAccent, Icons.running_with_errors_outlined)),
           ],
         ),
-        if (isAdmin) ...[
-          const SizedBox(height: 15),
-          InkWell(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FineScreen())),
-            borderRadius: BorderRadius.circular(28),
-            child: _buildModernStatCard(
-              'MONTHLY TOP FINE', 
-              '$fine ৳', 
-              Colors.orangeAccent, 
-              Icons.monetization_on_outlined, 
-              fullWidth: true,
-              subtitle: 'Top Loser: ${sortedPlayers.isNotEmpty ? sortedPlayers.first['name'] : "None"}'
-            ),
+        const SizedBox(height: 15),
+        InkWell(
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FineScreen())),
+          borderRadius: BorderRadius.circular(28),
+          child: _buildModernStatCard(
+            'MONTHLY TOP FINE', 
+            '$fine', 
+            Colors.orangeAccent, 
+            Icons.monetization_on_outlined, 
+            fullWidth: true,
+            subtitle: 'Top Loser: ${sortedPlayers.isNotEmpty ? sortedPlayers.first['name'] : "None"}'
           ),
-        ],
+        ),
       ],
     );
   }
@@ -211,7 +210,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white10),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -255,9 +254,11 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         _buildActionCard(context, 'STOCK LOG', 'Manage inventory', Icons.analytics_outlined, const Color(0xFF66BB6A), const InventoryScreen()),
         _buildActionCard(context, 'FINANCIALS', 'Club collections', Icons.account_balance_wallet_outlined, const Color(0xFFAB47BC), const ContributionScreen()),
         _buildActionCard(context, 'CLUB FUND', 'Total cash reserve', Icons.savings_outlined, const Color(0xFF26A69A), const FundScreen()),
+        _buildActionCard(context, 'PLAYER FINES', 'Due & Payments', Icons.warning_amber_rounded, const Color(0xFFEF5350), const FineScreen()),
+        _buildActionCard(context, 'REPORT CENTER', 'Bulk PDF Export', Icons.folder_shared_outlined, const Color(0xFF536DFE), const ReportCenterScreen()),
         if (isAdmin) ...[
-          _buildActionCard(context, 'RECORD LOSS', 'Log, Manage & Track', Icons.add_moderator_outlined, Colors.redAccent, const PlayerBallLossScreen()),
-          _buildActionCard(context, 'ADMIN PANEL', 'System management', Icons.admin_panel_settings_outlined, const Color(0xFFEF5350), const ManagePlayersScreen()),
+          _buildActionCard(context, 'RECORD LOSS', 'Log, Manage & Track', Icons.add_moderator_outlined, const Color(0xFFFF5252), const PlayerBallLossScreen()),
+          _buildActionCard(context, 'ADMIN PANEL', 'System management', Icons.admin_panel_settings_outlined, const Color(0xFF78909C), const ManagePlayersScreen()),
         ],
       ],
     );
