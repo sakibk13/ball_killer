@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/ball_provider.dart';
 import '../providers/fine_provider.dart';
+import '../providers/contribution_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/fine_payment.dart';
 import '../utils/export_service.dart';
@@ -601,6 +602,7 @@ class _FineScreenState extends State<FineScreen> {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
     DateTime selectedDate = DateTime.now();
+    bool syncToFinancials = true;
 
     showDialog(
       context: context,
@@ -614,24 +616,58 @@ class _FineScreenState extends State<FineScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DropdownButtonFormField<String>(
-                    dropdownColor: const Color(0xFF020C3B),
-                    decoration: _inputDecoration('SELECT PLAYER'),
-                    style: const TextStyle(color: Colors.white),
-                    items: players.where((p) => (p['total'] as int) > 0).map<DropdownMenuItem<String>>((p) {
-                      return DropdownMenuItem<String>(
-                        value: p['id'],
-                        child: Text(p['name'].toString().toUpperCase()),
-                        onTap: () => selectedPlayerName = p['name'],
-                      );
-                    }).toList(),
-                    onChanged: (val) => selectedPlayerId = val,
-                    validator: (val) => val == null ? 'Please select a player' : null,
+                  Autocomplete<Map<String, dynamic>>(
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text == '') return const Iterable<Map<String, dynamic>>.empty();
+                      return players.where((p) => (p['total'] as int) > 0 && p['name'].toString().toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                    },
+                    displayStringForOption: (p) => p['name'].toString().toUpperCase(),
+                    onSelected: (p) {
+                      selectedPlayerId = p['id'];
+                      selectedPlayerName = p['name'];
+                    },
+                    fieldViewBuilder: (ctx, ctrl, focus, onSub) => TextFormField(
+                      controller: ctrl,
+                      focusNode: focus,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _inputDecoration('SEARCH PLAYER (with balls lost)'),
+                      validator: (v) => selectedPlayerId == null ? 'Select a player' : null,
+                    ),
+                    optionsViewBuilder: (ctx, onSelected, options) => Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        color: const Color(0xFF020C3B),
+                        elevation: 4.0,
+                        child: Container(
+                          width: 250,
+                          constraints: const BoxConstraints(maxHeight: 200),
+                          child: ListView.builder(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: options.length,
+                            itemBuilder: (ctx, i) {
+                              final p = options.elementAt(i);
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  radius: 15,
+                                  backgroundColor: Colors.white10,
+                                  backgroundImage: p['photoUrl'] != null && p['photoUrl'] != '' ? MemoryImage(base64Decode(p['photoUrl'])) : null,
+                                  child: p['photoUrl'] == null || p['photoUrl'] == '' ? Text(p['name'][0], style: const TextStyle(fontSize: 10)) : null,
+                                ),
+                                title: Text(p['name'].toString().toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                subtitle: Text('Lost: ${p['total']} balls', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                onTap: () => onSelected(p),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 15),
                   TextFormField(
                     controller: amountController,
-                    decoration: _inputDecoration('GIVEN AMOUNT (৳)'),
+                    decoration: _inputDecoration('GIVEN AMOUNT'),
                     style: const TextStyle(color: Colors.white),
                     keyboardType: TextInputType.number,
                     validator: (val) => val == null || val.isEmpty ? 'Enter amount' : null,
@@ -664,6 +700,23 @@ class _FineScreenState extends State<FineScreen> {
                     ),
                   ),
                   const SizedBox(height: 15),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.03), borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("ADD TO FINANCIALS?", style: TextStyle(color: Colors.white60, fontSize: 11)),
+                        Switch(
+                          value: syncToFinancials, 
+                          onChanged: (v) => setDialogState(() => syncToFinancials = v),
+                          activeColor: Colors.orange,
+                          scale: 0.8,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 15),
                   TextFormField(
                     controller: noteController,
                     decoration: _inputDecoration('OPTIONAL NOTE'),
@@ -680,13 +733,44 @@ class _FineScreenState extends State<FineScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
               onPressed: () async {
                 if (formKey.currentState!.validate() && selectedPlayerId != null) {
+                  final amount = double.parse(amountController.text);
                   final payment = FinePayment(
                     playerId: selectedPlayerId!,
                     playerName: selectedPlayerName!,
-                    amountPaid: double.parse(amountController.text),
+                    amountPaid: amount,
                     date: selectedDate,
                     note: noteController.text,
                     monthYear: DateFormat('MM-yyyy').format(selectedDate),
+                  );
+                  
+                  final success = await Provider.of<FineProvider>(context, listen: false).addPayment(payment);
+                  
+                  if (success && syncToFinancials) {
+                    final contrib = Contribution(
+                      playerId: selectedPlayerId,
+                      name: selectedPlayerName!,
+                      taka: amount,
+                      date: selectedDate,
+                      monthYear: DateFormat('MM-yyyy').format(selectedDate),
+                      ballTape: "Fine Collection: ${noteController.text}",
+                      isFinePayment: true,
+                    );
+                    await Provider.of<ContributionProvider>(context, listen: false).addContribution(contrib);
+                  }
+
+                  if (success) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Record added successfully')));
+                  }
+                }
+              },
+              child: const Text('SAVE RECORD', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
                   );
                   
                   final success = await Provider.of<FineProvider>(context, listen: false).addPayment(payment);

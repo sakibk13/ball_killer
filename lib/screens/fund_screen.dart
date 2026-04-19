@@ -217,6 +217,8 @@ class _FundScreenState extends State<FundScreen> {
   }
 
   void _showAddFundDialog(BuildContext context) {
+    final ballProvider = Provider.of<BallProvider>(context, listen: false);
+    final players = ballProvider.players;
     final nameController = TextEditingController();
     final amountController = TextEditingController();
     final noteController = TextEditingController();
@@ -232,10 +234,55 @@ class _FundScreenState extends State<FundScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  controller: nameController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _inputDeco('NAME / SOURCE'),
+                Autocomplete<String>(
+                  optionsBuilder: (TextEditingValue textEditingValue) {
+                    if (textEditingValue.text == '') {
+                      return const Iterable<String>.empty();
+                    }
+                    return players
+                        .where((p) => p.name.toLowerCase().contains(textEditingValue.text.toLowerCase()))
+                        .map((p) => p.name);
+                  },
+                  onSelected: (String selection) {
+                    nameController.text = selection;
+                  },
+                  fieldViewBuilder: (ctx, ctrl, focus, onSub) => TextFormField(
+                    controller: ctrl,
+                    focusNode: focus,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputDeco('NAME / SOURCE'),
+                    onChanged: (v) => nameController.text = v,
+                  ),
+                  optionsViewBuilder: (ctx, onSelected, options) => Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      color: const Color(0xFF020C3B),
+                      elevation: 4.0,
+                      child: Container(
+                        width: 250,
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: options.length,
+                          itemBuilder: (ctx, i) {
+                            final name = options.elementAt(i);
+                            final p = players.firstWhere((p) => p.name == name);
+                            return ListTile(
+                              leading: CircleAvatar(
+                                radius: 15,
+                                backgroundColor: Colors.white10,
+                                backgroundImage: p.photoUrl != '' ? MemoryImage(base64Decode(p.photoUrl)) : null,
+                                child: p.photoUrl == '' ? Text(p.name[0], style: const TextStyle(fontSize: 10)) : null,
+                              ),
+                              title: Text(p.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              onTap: () => onSelected(name),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 15),
                 TextField(
@@ -281,9 +328,15 @@ class _FundScreenState extends State<FundScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
               onPressed: () async {
-                if (nameController.text.isNotEmpty && amountController.text.isNotEmpty) {
+                final String name = nameController.text.isEmpty 
+                    ? (players.any((p) => p.name.toLowerCase() == nameController.text.toLowerCase()) 
+                        ? nameController.text 
+                        : nameController.text) 
+                    : nameController.text;
+                
+                if (name.isNotEmpty && amountController.text.isNotEmpty) {
                   final fund = Fund(
-                    name: nameController.text,
+                    name: name,
                     amount: double.parse(amountController.text),
                     date: selectedDate,
                     note: noteController.text,

@@ -155,7 +155,7 @@ class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProvider
               Expanded(
                 child: Column(
                   children: playerNames.map((name) {
-                    final totalLost = summarized[name];
+                    final totalLost = summarized[name]?.abs() ?? 0; // Force absolute
                     final originals = originalRecords[name]!;
 
                     return Container(
