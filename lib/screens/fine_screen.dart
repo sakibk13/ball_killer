@@ -8,6 +8,7 @@ import '../providers/fine_provider.dart';
 import '../providers/contribution_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/fine_payment.dart';
+import '../models/contribution.dart';
 import '../utils/export_service.dart';
 import '../services/sms_service.dart';
 
@@ -54,15 +55,11 @@ class _FineScreenState extends State<FineScreen> {
       final int totalLost = p['total'] as int;
       final double totalFine = totalLost * 50.0;
       
-      // 1. Direct Fine Payments
       final double directFinePayments = fineProvider.getTotalPaidForPlayer(playerId, _selectedMonthYear);
-      
-      // 2. Contributions marked specifically as Fine Payments
       final double fineFromContribs = contributionProvider.contributions
           .where((c) => c.playerId == playerId && (_selectedMonthYear == 'Overall' || c.monthYear == _selectedMonthYear) && c.isFinePayment)
           .fold(0.0, (sum, c) => sum + c.taka);
       
-      // 3. General Contributions (Not for fine)
       final double generalContribs = contributionProvider.contributions
           .where((c) => c.playerId == playerId && (_selectedMonthYear == 'Overall' || c.monthYear == _selectedMonthYear) && !c.isFinePayment)
           .fold(0.0, (sum, c) => sum + c.taka);
@@ -74,8 +71,8 @@ class _FineScreenState extends State<FineScreen> {
       return {
         ...p,
         'totalFine': totalFine,
-        'paid': totalFineGiven, // Specifically for fine
-        'totalGiven': totalEverythingGiven, // All money given
+        'paid': totalFineGiven,
+        'totalGiven': totalEverythingGiven,
         'due': due,
       };
     }).toList();
@@ -127,7 +124,6 @@ class _FineScreenState extends State<FineScreen> {
             Expanded(
               child: TabBarView(
                 children: [
-                  // Tab 1: Notices
                   SingleChildScrollView(
                     padding: const EdgeInsets.all(20),
                     child: Column(
@@ -148,7 +144,6 @@ class _FineScreenState extends State<FineScreen> {
                       ],
                     ),
                   ),
-                  // Tab 2: Given History (Date First Layout)
                   _buildGivenHistoryTab(fineProvider),
                 ],
               ),
@@ -255,7 +250,6 @@ class _FineScreenState extends State<FineScreen> {
           Text(player['name'].toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, letterSpacing: 2)),
           const SizedBox(height: 25),
           
-          // Row 1: Loss & Total Fine
           Row(
             children: [
               Expanded(child: _buildSquareDetail('BALLS LOST', '$lost', Colors.white24)),
@@ -264,7 +258,6 @@ class _FineScreenState extends State<FineScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          // Row 2: Fine Given & General Contrib
           Row(
             children: [
               Expanded(child: _buildSquareDetail('FINE GIVEN', '${fineGiven.toInt()}', Colors.greenAccent.withOpacity(0.1), textCol: Colors.greenAccent)),
@@ -273,7 +266,6 @@ class _FineScreenState extends State<FineScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          // Row 3: Due Balance
           _buildSquareDetail('DUE BALANCE', '${due.toInt()}', due > 0 ? Colors.orangeAccent.withOpacity(0.1) : Colors.greenAccent.withOpacity(0.1), textCol: due > 0 ? Colors.orangeAccent : Colors.greenAccent, fullWidth: true),
 
           const SizedBox(height: 20),
@@ -345,10 +337,10 @@ class _FineScreenState extends State<FineScreen> {
                   CircleAvatar(
                     radius: 18,
                     backgroundColor: Colors.white10,
-                    backgroundImage: p['photoUrl'] != null && p['photoUrl'].isNotEmpty 
+                    backgroundImage: p['photoUrl'] != null && p['photoUrl'] != '' 
                         ? MemoryImage(base64Decode(p['photoUrl'])) 
                         : null,
-                    child: p['photoUrl'] == null || p['photoUrl'].isEmpty ? Text(p['name'][0], style: const TextStyle(color: Colors.orange)) : null,
+                    child: p['photoUrl'] == null || p['photoUrl'] == '' ? Text(p['name'][0], style: const TextStyle(color: Colors.orange)) : null,
                   ),
                   const SizedBox(width: 15),
                   Expanded(
@@ -487,7 +479,6 @@ class _FineScreenState extends State<FineScreen> {
       );
     }
 
-    // Group by Date
     Map<String, List<FinePayment>> grouped = {};
     for (var p in payments) {
       String dateStr = DateFormat('yyyy-MM-dd').format(p.date);
@@ -509,7 +500,6 @@ class _FineScreenState extends State<FineScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Calendar Card
               Container(
                 width: 65,
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -574,7 +564,7 @@ class _FineScreenState extends State<FineScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF020C3B),
         title: Text('DELETE RECORD', style: GoogleFonts.bebasNeue(color: Colors.white)),
-        content: Text('Remove this record of ${payment.amountPaid.toInt()} ৳?', style: GoogleFonts.poppins(color: Colors.white70)),
+        content: Text('Remove this record of ${payment.amountPaid.toInt()}?', style: GoogleFonts.poppins(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
           TextButton(
@@ -706,12 +696,11 @@ class _FineScreenState extends State<FineScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("ADD TO FINANCIALS?", style: TextStyle(color: Colors.white60, fontSize: 11)),
+                        Text("ADD TO FINANCIALS?", style: GoogleFonts.poppins(color: Colors.white60, fontSize: 11)),
                         Switch(
                           value: syncToFinancials, 
                           onChanged: (v) => setDialogState(() => syncToFinancials = v),
                           activeColor: Colors.orange,
-                          scale: 0.8,
                         ),
                       ],
                     ),
@@ -728,7 +717,7 @@ class _FineScreenState extends State<FineScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text('CANCEL', style: GoogleFonts.poppins())),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
               onPressed: () async {
@@ -764,23 +753,7 @@ class _FineScreenState extends State<FineScreen> {
                   }
                 }
               },
-              child: const Text('SAVE RECORD', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-                  );
-                  
-                  final success = await Provider.of<FineProvider>(context, listen: false).addPayment(payment);
-                  if (success) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Record added successfully')));
-                  }
-                }
-              },
-              child: const Text('SAVE RECORD', style: TextStyle(color: Colors.white)),
+              child: Text('SAVE RECORD', style: GoogleFonts.bebasNeue(color: Colors.white)),
             ),
           ],
         ),
