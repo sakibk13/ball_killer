@@ -28,6 +28,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
   DateTime _selectedDate = DateTime.now();
   String _selectedMonthYear = 'Overall';
   late List<String> _monthList;
+  bool _isFinePayment = false;
 
   @override
   void initState() {
@@ -68,6 +69,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
       _ballCountController.text = editItem.ballCount.toString();
       _tapeCountController.text = editItem.tapeCount.toString();
       _infoController.text = editItem.ballTape;
+      _isFinePayment = editItem.isFinePayment;
     } else {
       _selectedDate = DateTime.now(); 
       _nameController.clear();
@@ -75,6 +77,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
       _ballCountController.text = '0';
       _tapeCountController.text = '0';
       _infoController.clear();
+      _isFinePayment = false;
     }
 
     showModalBottomSheet(
@@ -156,6 +159,31 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                   decoration: _inputDeco('Total Amount (৳)', Icons.payments_outlined),
                 ),
                 const SizedBox(height: 16),
+                
+                // NEW: Toggle for Fine Deduction
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(15)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("COUNT AS FINE?", style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 14)),
+                          const Text("If ON, this amount will deduct from Fine", style: TextStyle(color: Colors.white24, fontSize: 10)),
+                        ],
+                      ),
+                      Switch(
+                        value: _isFinePayment,
+                        onChanged: (val) => setModalState(() => _isFinePayment = val),
+                        activeColor: Colors.orange,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 TextField(
                   controller: _infoController, 
                   style: const TextStyle(color: Colors.white70, fontSize: 14), 
@@ -187,8 +215,14 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                          }
                       }
 
+                      String? selectedPlayerId;
+                      try {
+                        selectedPlayerId = players.firstWhere((p) => p.name == _nameController.text).id;
+                      } catch (_) {}
+
                       final c = Contribution(
                         id: editItem?.id,
+                        playerId: selectedPlayerId,
                         name: _nameController.text,
                         taka: double.parse(_takaController.text),
                         date: _selectedDate,
@@ -196,6 +230,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                         ballTape: finalNote,
                         ballCount: balls,
                         tapeCount: tapes,
+                        isFinePayment: _isFinePayment, // Save the state
                       );
                       
                       final provider = Provider.of<ContributionProvider>(context, listen: false);
@@ -520,8 +555,12 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                 child: Column(
                   children: items.map((item) {
                     bool isFine = item is FinePayment;
+                    bool isDeductibleContrib = item is Contribution && item.isFinePayment;
+                    
                     String name = isFine ? item.playerName : item.name;
-                    String note = isFine ? "Fine Collection${item.note != null && item.note!.isNotEmpty ? " | " + item.note! : ""}" : item.ballTape;
+                    String note = isFine 
+                        ? "Fine Collection${item.note != null && item.note!.isNotEmpty ? " | " + item.note! : ""}" 
+                        : (isDeductibleContrib ? "(Fine) " : "") + item.ballTape;
                     double amount = isFine ? item.amountPaid : item.taka;
 
                     return Container(
@@ -530,7 +569,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: isFine ? Colors.greenAccent.withOpacity(0.2) : Colors.white10),
+                        border: Border.all(color: isFine || isDeductibleContrib ? Colors.greenAccent.withOpacity(0.2) : Colors.white10),
                       ),
                       child: Row(
                         children: [
@@ -539,11 +578,11 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(name.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                                Text(note, style: TextStyle(color: isFine ? Colors.greenAccent.withOpacity(0.5) : Colors.white38, fontSize: 9)),
+                                Text(note, style: TextStyle(color: isFine || isDeductibleContrib ? Colors.greenAccent.withOpacity(0.5) : Colors.white38, fontSize: 9)),
                               ],
                             ),
                           ),
-                          Text('${amount.toInt()} ৳', style: GoogleFonts.bebasNeue(color: isFine ? Colors.greenAccent : Colors.white70, fontSize: 18)),
+                          Text('${amount.toInt()} ৳', style: GoogleFonts.bebasNeue(color: isFine || isDeductibleContrib ? Colors.greenAccent : Colors.white70, fontSize: 18)),
                         ],
                       ),
                     );

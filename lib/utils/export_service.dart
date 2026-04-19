@@ -11,8 +11,80 @@ import 'package:intl/intl.dart';
 
 import '../models/contribution.dart';
 import '../models/fine_payment.dart';
+import '../models/fund.dart';
 
 class ExportService {
+  static Future<void> exportFundReport({
+    required List<Fund> funds,
+    required double grandTotal,
+  }) async {
+    final pdf = pw.Document();
+    pw.MemoryImage? logoImage;
+    try {
+      final ByteData logoBytes = await rootBundle.load('assets/icon/logo3.png');
+      logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
+    } catch (e) {
+      debugPrint('Error loading logo: $e');
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        header: (context) => _buildPdfHeader('OFFICIAL FUND REPORT', logoImage),
+        footer: (context) => _buildPdfFooter('Official Fund History Document', context.pageNumber),
+        build: (pw.Context context) {
+          return [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('REPORT TYPE: COMPLETE HISTORY', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                pw.Text('DATE: ${DateFormat('MMM dd, yyyy').format(DateTime.now())}', style: pw.TextStyle(fontSize: 8)),
+              ],
+            ),
+            pw.SizedBox(height: 16),
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
+              columnWidths: {
+                0: const pw.FixedColumnWidth(80), 
+                1: const pw.FlexColumnWidth(), 
+                2: const pw.FixedColumnWidth(100)
+              },
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.blue900),
+                  children: [
+                    _buildHeaderCell('DATE', align: pw.TextAlign.center), 
+                    _buildHeaderCell('NAME / SOURCE'), 
+                    _buildHeaderCell('AMOUNT', align: pw.TextAlign.right),
+                  ],
+                ),
+                ...funds.map((f) {
+                  return pw.TableRow(
+                    children: [
+                      _buildDataCell(DateFormat('dd MMM, yyyy').format(f.date), align: pw.TextAlign.center),
+                      _buildDataCell(f.name.toUpperCase(), fontWeight: pw.FontWeight.bold),
+                      _buildDataCell('${f.amount.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold),
+                    ],
+                  );
+                }),
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  children: [
+                    pw.SizedBox(),
+                    _buildDataCell('TOTAL COLLECTION', fontWeight: pw.FontWeight.bold),
+                    _buildDataCell('${grandTotal.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
+                  ],
+                ),
+              ],
+            ),
+          ];
+        },
+      ),
+    );
+    await _saveAndDownload(pdf, 'club_fund_report.pdf');
+  }
+
   static Future<void> exportFinancialSummaryReport({
     required String monthYear,
     required Map<String, Map<String, double>> data,

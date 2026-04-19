@@ -8,49 +8,52 @@ class SmsService {
 
   static String formatNumber(String number) {
     String cleaned = number.replaceAll(RegExp(r'[^0-9]'), '');
-    if (cleaned.startsWith('0')) {
+    // If it starts with 0 (like 017...), add 88
+    if (cleaned.startsWith('0') && cleaned.length == 11) {
       return '88$cleaned';
-    } else if (cleaned.startsWith('1')) {
+    } 
+    // If it starts with 1 (like 17...), add 880
+    if (cleaned.startsWith('1') && cleaned.length == 10) {
       return '880$cleaned';
     }
+    // If it's already 880...
     return cleaned;
   }
 
-  static Future<bool> sendCustomSms({
+  /// Returns a message string for the UI (Success or Error Details)
+  static Future<String> sendCustomSms({
     required String phoneNumber,
     required String message,
   }) async {
     final String formattedNumber = formatNumber(phoneNumber);
     
     try {
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        body: {
-          "api_key": apiKey,
-          "type": "text",
-          "number": formattedNumber,
-          "senderid": "8809617611085",
-          "message": message,
-        },
-      );
+      // We use a more standard approach for BulkSMSBD
+      final url = Uri.parse(baseUrl).replace(queryParameters: {
+        "api_key": apiKey,
+        "type": "text",
+        "number": formattedNumber,
+        "senderid": "8809617611085", // Non-masking Default
+        "message": message,
+      });
+
+      final response = await http.get(url);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        // Bulk SMS BD returns "success" in response_code for successful submission
-        if (data['response_code'] == 202 || data['success_message'] != null) {
-          debugPrint("SMS Sent successfully to $formattedNumber");
-          return true;
+        
+        // 202 is the successful submission code for BulkSMSBD
+        if (data['response_code'] == 202) {
+          return "SUCCESS";
         } else {
-          debugPrint("SMS API Error: ${response.body}");
-          return false;
+          // Return the actual error from their server
+          return data['error_message'] ?? data['success_message'] ?? "Error: ${response.body}";
         }
       } else {
-        debugPrint("SMS HTTP Error: ${response.statusCode}");
-        return false;
+        return "Server Error: ${response.statusCode}";
       }
     } catch (e) {
-      debugPrint("SMS Exception: $e");
-      return false;
+      return "App Error: $e";
     }
   }
 
@@ -63,12 +66,12 @@ class SmsService {
   }) {
     if (dueAmount > 0) {
       if (givenAmount > 0) {
-        return "Hello $name, your fine for $ballsLost balls is $totalFine BDT. You gave $givenAmount BDT. Pending due: $dueAmount BDT. Please clear it soon. - Ball Killer by Mini Cricket";
+        return "Hello $name, your fine for $ballsLost balls is $totalFine. You gave $givenAmount. Due: $dueAmount. Please clear it. - Ball Killer by Mini Cricket";
       } else {
-        return "Hello $name, you have a fine of $totalFine BDT for $ballsLost balls lost. Please pay to the club treasurer. - Ball Killer by Mini Cricket";
+        return "Hello $name, you have a fine of $totalFine for $ballsLost balls lost. Please pay to club treasurer. - Ball Killer by Mini Cricket";
       }
     } else {
-      return "Hello $name, thank you for clearing your fine of $totalFine BDT for $ballsLost balls. Play safe! - Ball Killer by Mini Cricket";
+      return "Hello $name, thank you for clearing your fine of $totalFine for $ballsLost balls. Play safe! - Ball Killer by Mini Cricket";
     }
   }
 }

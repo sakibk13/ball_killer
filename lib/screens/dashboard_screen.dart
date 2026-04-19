@@ -14,6 +14,7 @@ import 'inventory_screen.dart';
 import 'contribution_screen.dart';
 import 'leaderboard_screen.dart';
 import 'fine_screen.dart';
+import 'fund_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -253,6 +254,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         _buildActionCard(context, 'LEADERBOARD', 'Top ball killers', Icons.emoji_events_outlined, const Color(0xFFFFA726), const LeaderboardScreen()),
         _buildActionCard(context, 'STOCK LOG', 'Manage inventory', Icons.analytics_outlined, const Color(0xFF66BB6A), const InventoryScreen()),
         _buildActionCard(context, 'FINANCIALS', 'Club collections', Icons.account_balance_wallet_outlined, const Color(0xFFAB47BC), const ContributionScreen()),
+        _buildActionCard(context, 'CLUB FUND', 'Total cash reserve', Icons.savings_outlined, const Color(0xFF26A69A), const FundScreen()),
         if (isAdmin) ...[
           _buildActionCard(context, 'RECORD LOSS', 'Log, Manage & Track', Icons.add_moderator_outlined, Colors.redAccent, const PlayerBallLossScreen()),
           _buildActionCard(context, 'ADMIN PANEL', 'System management', Icons.admin_panel_settings_outlined, const Color(0xFFEF5350), const ManagePlayersScreen()),

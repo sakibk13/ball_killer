@@ -117,13 +117,24 @@ class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProvider
         String dateKey = dates[index];
         DateTime date = DateTime.parse(dateKey);
         List<BallRecord> records = groupedByDate[dateKey]!;
+
+        // SUMMARIZE DUPLICATES: Group by player and sum lostCount
+        Map<String, int> summarized = {};
+        Map<String, List<BallRecord>> originalRecords = {}; // For edit/delete access
+        for (var r in records) {
+          summarized[r.playerName] = (summarized[r.playerName] ?? 0) + r.lostCount;
+          originalRecords.putIfAbsent(r.playerName, () => []);
+          originalRecords[r.playerName]!.add(r);
+        }
+
+        var playerNames = summarized.keys.toList()..sort();
         
         return Container(
           margin: const EdgeInsets.only(bottom: 25),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Calendar Date Card (Consistent with others)
+              // Calendar Date Card
               Container(
                 width: 65,
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -143,40 +154,46 @@ class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProvider
               // List of records
               Expanded(
                 child: Column(
-                  children: records.map((r) => Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(r.playerName.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                              if (r.note != null && r.note!.isNotEmpty)
-                                Text(r.note!, style: const TextStyle(color: Colors.white38, fontSize: 9)),
-                            ],
+                  children: playerNames.map((name) {
+                    final totalLost = summarized[name];
+                    final originals = originalRecords[name]!;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                if (originals.length > 1)
+                                  Text('${originals.length} entries added', style: const TextStyle(color: Colors.white24, fontSize: 9)),
+                              ],
+                            ),
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                          child: Text('${r.lostCount}', style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 18)),
-                        ),
-                        if (isAdmin) ...[
-                          const SizedBox(width: 10),
-                          _buildActionIcon(Icons.edit_outlined, Colors.blueAccent, () => _showEditRecordDialog(context, r)),
-                          const SizedBox(width: 5),
-                          _buildActionIcon(Icons.delete_outline, Colors.redAccent, () => _showDeleteRecordDialog(context, r)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                            child: Text('$totalLost', style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 18)),
+                          ),
+                          if (isAdmin) ...[
+                            const SizedBox(width: 10),
+                            // If summarized, we show access to the first record for simplicity, or provide a way to see all
+                            _buildActionIcon(Icons.edit_outlined, Colors.blueAccent, () => _showEditRecordDialog(context, originals.first)),
+                            const SizedBox(width: 5),
+                            _buildActionIcon(Icons.delete_outline, Colors.redAccent, () => _showDeleteRecordDialog(context, originals.first)),
+                          ],
                         ],
-                      ],
-                    ),
-                  )).toList(),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ],

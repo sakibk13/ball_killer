@@ -6,6 +6,7 @@ import '../models/ball_record.dart';
 import '../models/contribution.dart';
 import '../models/inventory.dart';
 import '../models/fine_payment.dart';
+import '../models/fund.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -47,6 +48,35 @@ class DatabaseService {
       await _db.collection('fine_payments').doc(id).delete();
     } catch (e) {
       debugPrint('!!! DELETE FINE PAYMENT ERROR: $e');
+    }
+  }
+
+  // Fund operations
+  Future<List<Fund>> getFunds() async {
+    try {
+      final snap = await _db.collection('funds').orderBy('date', descending: true).get();
+      return snap.docs.map((doc) => Fund.fromMap(doc.data(), docId: doc.id)).toList();
+    } catch (e) {
+      debugPrint('!!! GET FUNDS ERROR: $e');
+      return [];
+    }
+  }
+
+  Future<bool> addFund(Fund fund) async {
+    try {
+      await _db.collection('funds').add(fund.toMap());
+      return true;
+    } catch (e) {
+      debugPrint('!!! ADD FUND ERROR: $e');
+      return false;
+    }
+  }
+
+  Future<void> deleteFund(String id) async {
+    try {
+      await _db.collection('funds').doc(id).delete();
+    } catch (e) {
+      debugPrint('!!! DELETE FUND ERROR: $e');
     }
   }
 

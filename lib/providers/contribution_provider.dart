@@ -90,4 +90,18 @@ class ContributionProvider with ChangeNotifier {
     }
     return monthlyTotals;
   }
+
+  double getTotalForPlayer(String? playerId, String monthYear) {
+    if (playerId == null) return 0;
+    
+    if (monthYear == 'Overall') {
+      return _contributions
+          .where((c) => c.playerId == playerId)
+          .fold(0.0, (sum, c) => sum + c.taka);
+    }
+    
+    return _contributions
+        .where((c) => c.playerId == playerId && c.monthYear == monthYear)
+        .fold(0.0, (sum, c) => sum + c.taka);
+  }
 }

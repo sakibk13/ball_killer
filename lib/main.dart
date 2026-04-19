@@ -8,6 +8,7 @@ import 'providers/ball_provider.dart';
 import 'providers/contribution_provider.dart';
 import 'providers/inventory_provider.dart';
 import 'providers/fine_provider.dart';
+import 'providers/fund_provider.dart';
 import 'screens/auth_screen.dart';
 import 'screens/dashboard_screen.dart';
 
@@ -27,6 +28,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ContributionProvider()),
         ChangeNotifierProvider(create: (_) => InventoryProvider()),
         ChangeNotifierProvider(create: (_) => FineProvider()),
+        ChangeNotifierProvider(create: (_) => FundProvider()),
       ],
       child: const BallKillerApp(),
     ),

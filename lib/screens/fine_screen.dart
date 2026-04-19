@@ -44,6 +44,7 @@ class _FineScreenState extends State<FineScreen> {
   Widget build(BuildContext context) {
     final ballProvider = Provider.of<BallProvider>(context);
     final fineProvider = Provider.of<FineProvider>(context);
+    final contributionProvider = Provider.of<ContributionProvider>(context);
     
     final playersWithTotals = ballProvider.getPlayersWithTotals(monthYear: _selectedMonthYear);
     
@@ -51,13 +52,29 @@ class _FineScreenState extends State<FineScreen> {
       final String playerId = p['id'];
       final int totalLost = p['total'] as int;
       final double totalFine = totalLost * 50.0;
-      final double paid = fineProvider.getTotalPaidForPlayer(playerId, _selectedMonthYear);
-      final double due = totalFine - paid;
       
+      // 1. Direct Fine Payments
+      final double directFinePayments = fineProvider.getTotalPaidForPlayer(playerId, _selectedMonthYear);
+      
+      // 2. Contributions marked specifically as Fine Payments
+      final double fineFromContribs = contributionProvider.contributions
+          .where((c) => c.playerId == playerId && (_selectedMonthYear == 'Overall' || c.monthYear == _selectedMonthYear) && c.isFinePayment)
+          .fold(0.0, (sum, c) => sum + c.taka);
+      
+      // 3. General Contributions (Not for fine)
+      final double generalContribs = contributionProvider.contributions
+          .where((c) => c.playerId == playerId && (_selectedMonthYear == 'Overall' || c.monthYear == _selectedMonthYear) && !c.isFinePayment)
+          .fold(0.0, (sum, c) => sum + c.taka);
+
+      final double totalFineGiven = directFinePayments + fineFromContribs;
+      final double totalEverythingGiven = totalFineGiven + generalContribs;
+      final double due = (totalFine - totalFineGiven).clamp(0, double.infinity);
+
       return {
         ...p,
         'totalFine': totalFine,
-        'paid': paid,
+        'paid': totalFineGiven, // Specifically for fine
+        'totalGiven': totalEverythingGiven, // All money given
         'due': due,
       };
     }).toList();
@@ -68,7 +85,8 @@ class _FineScreenState extends State<FineScreen> {
     final topPlayer = sortedPlayers.isNotEmpty ? sortedPlayers.first : null;
     final int totalLost = topPlayer != null ? (topPlayer['total'] as int) : 0;
     final double fineAmount = topPlayer != null ? topPlayer['totalFine'] : 0.0;
-    final double topPaid = topPlayer != null ? topPlayer['paid'] : 0.0;
+    final double topFineGiven = topPlayer != null ? topPlayer['paid'] : 0.0;
+    final double topTotalGiven = topPlayer != null ? topPlayer['totalGiven'] : 0.0;
     final double topDue = topPlayer != null ? topPlayer['due'] : 0.0;
 
     return DefaultTabController(
@@ -114,7 +132,7 @@ class _FineScreenState extends State<FineScreen> {
                     child: Column(
                       children: [
                         if (topPlayer != null && totalLost > 0) ...[
-                          _buildFineCard(topPlayer, totalLost, fineAmount, topPaid, topDue),
+                          _buildFineCard(topPlayer, totalLost, fineAmount, topFineGiven, topTotalGiven, topDue),
                           const SizedBox(height: 30),
                           _buildSectionHeader('RANKING ${_selectedMonthYear == 'Overall' ? 'OVERALL' : 'THIS MONTH'}'),
                           const SizedBox(height: 15),
@@ -181,7 +199,7 @@ class _FineScreenState extends State<FineScreen> {
     );
   }
 
-  Widget _buildFineCard(Map<String, dynamic> player, int lost, double fine, double given, double due) {
+  Widget _buildFineCard(Map<String, dynamic> player, int lost, double fine, double fineGiven, double totalGiven, double due) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(25),
@@ -236,7 +254,7 @@ class _FineScreenState extends State<FineScreen> {
           Text(player['name'].toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, letterSpacing: 2)),
           const SizedBox(height: 25),
           
-          // Redesigned square layout for details
+          // Row 1: Loss & Total Fine
           Row(
             children: [
               Expanded(child: _buildSquareDetail('BALLS LOST', '$lost', Colors.white24)),
@@ -245,13 +263,17 @@ class _FineScreenState extends State<FineScreen> {
             ],
           ),
           const SizedBox(height: 10),
+          // Row 2: Fine Given & General Contrib
           Row(
             children: [
-              Expanded(child: _buildSquareDetail('GIVEN', '${given.toInt()}', Colors.greenAccent.withOpacity(0.1), textCol: Colors.greenAccent)),
+              Expanded(child: _buildSquareDetail('FINE GIVEN', '${fineGiven.toInt()}', Colors.greenAccent.withOpacity(0.1), textCol: Colors.greenAccent)),
               const SizedBox(width: 10),
-              Expanded(child: _buildSquareDetail('DUE', '${due.toInt()}', due > 0 ? Colors.orangeAccent.withOpacity(0.1) : Colors.greenAccent.withOpacity(0.1), textCol: due > 0 ? Colors.orangeAccent : Colors.greenAccent)),
+              Expanded(child: _buildSquareDetail('CONTRIB.', '${totalGiven.toInt()}', Colors.blueAccent.withOpacity(0.1), textCol: Colors.blueAccent)),
             ],
           ),
+          const SizedBox(height: 10),
+          // Row 3: Due Balance
+          _buildSquareDetail('DUE BALANCE', '${due.toInt()}', due > 0 ? Colors.orangeAccent.withOpacity(0.1) : Colors.greenAccent.withOpacity(0.1), textCol: due > 0 ? Colors.orangeAccent : Colors.greenAccent, fullWidth: true),
 
           const SizedBox(height: 20),
           Text(
@@ -264,8 +286,9 @@ class _FineScreenState extends State<FineScreen> {
     );
   }
 
-  Widget _buildSquareDetail(String label, String val, Color bg, {Color textCol = Colors.white}) {
+  Widget _buildSquareDetail(String label, String val, Color bg, {Color textCol = Colors.white, bool fullWidth = false}) {
     return Container(
+      width: fullWidth ? double.infinity : null,
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         color: bg,
@@ -300,7 +323,8 @@ class _FineScreenState extends State<FineScreen> {
         final p = players[i];
         final total = p['total'] as int;
         final fine = p['totalFine'] as double;
-        final given = p['paid'] as double;
+        final fineGiven = p['paid'] as double;
+        final totalGiven = p['totalGiven'] as double;
         final due = p['due'] as double;
 
         return Container(
@@ -340,7 +364,7 @@ class _FineScreenState extends State<FineScreen> {
                               icon: const Icon(Icons.message_outlined, color: Colors.orange, size: 18),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
-                              onPressed: () => _showCustomSmsDialog(context, p, total, fine, given, due),
+                              onPressed: () => _showCustomSmsDialog(context, p, total, fine, fineGiven, due),
                             ),
                           if (Provider.of<AuthProvider>(context, listen: false).isAdmin)
                             const SizedBox(width: 10),
@@ -361,7 +385,8 @@ class _FineScreenState extends State<FineScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildMiniStatus('GIVEN', '${given.toInt()}', Colors.greenAccent),
+                    _buildMiniStatus('FINE GIVEN', '${fineGiven.toInt()}', Colors.greenAccent),
+                    _buildMiniStatus('TOTAL CONTRIB.', '${totalGiven.toInt()}', Colors.blueAccent),
                     _buildMiniStatus('DUE', '${due.toInt()}', due > 0 ? Colors.orangeAccent : Colors.greenAccent),
                   ],
                 ),
@@ -412,15 +437,18 @@ class _FineScreenState extends State<FineScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             onPressed: () async {
               Navigator.pop(ctx);
-              final success = await SmsService.sendCustomSms(
+              final result = await SmsService.sendCustomSms(
                 phoneNumber: player['phone'],
                 message: controller.text,
               );
+              
               if (context.mounted) {
+                final bool isSuccess = result == "SUCCESS";
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(success ? "SMS sent to ${player['name']}" : "Failed to send SMS. Check your BulkSMSBD balance."),
-                    backgroundColor: success ? Colors.green : Colors.red,
+                    content: Text(isSuccess ? "SMS sent to ${player['name']}" : "SMS Failed: $result"),
+                    backgroundColor: isSuccess ? Colors.green : Colors.red,
+                    duration: const Duration(seconds: 4),
                   )
                 );
               }
