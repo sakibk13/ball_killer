@@ -3,8 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/ball_provider.dart';
+import '../providers/auth_provider.dart';
 import '../models/ball_record.dart';
-import '../utils/quotes.dart';
 
 class RecordsScreen extends StatefulWidget {
   const RecordsScreen({super.key});
@@ -16,12 +16,10 @@ class RecordsScreen extends StatefulWidget {
 class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late List<String> _monthList;
-  late String _randomQuote;
 
   @override
   void initState() {
     super.initState();
-    _randomQuote = "“খেলাধুলায় বাড়ে বল, মাদক ছেড়ে খেলতে চল।”";
     _generateMonthList();
     _tabController = TabController(length: _monthList.length, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -68,100 +66,19 @@ class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProvider
           }).toList(),
         ),
       ),
-      body: Column(
-        children: [
-          _buildHeroHeader(),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => ballProvider.refresh(),
-              color: Colors.orange,
-              child: TabBarView(
-                controller: _tabController,
-                children: _monthList.map((m) => _buildMonthTable(m, ballProvider.allRecords)).toList(),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeroHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF020C3B),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(40),
-          bottomRight: Radius.circular(40),
+      body: RefreshIndicator(
+        onRefresh: () => ballProvider.refresh(),
+        color: Colors.orange,
+        child: TabBarView(
+          controller: _tabController,
+          children: _monthList.map((m) => _buildMonthTable(m, ballProvider.allRecords)).toList(),
         ),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 10)),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
-                ),
-                child: Image.asset('assets/icon/logo3.png', height: 50, width: 50, errorBuilder: (c, e, s) => const Icon(Icons.sports_cricket, color: Colors.orange, size: 40)),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'BALL KILLER CLUB',
-                      style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 32, letterSpacing: 2),
-                    ),
-                    Text(
-                      'PROFESSIONAL TRACK OVERVIEW',
-                      style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 14, letterSpacing: 1.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white10),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.format_quote_rounded, color: Colors.orange, size: 24),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    _randomQuote,
-                    style: GoogleFonts.hindSiliguri(
-                      color: Colors.white70, 
-                      fontSize: 16, 
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
 
   Widget _buildMonthTable(String monthYear, List<BallRecord> allRecords) {
+    final isAdmin = Provider.of<AuthProvider>(context, listen: false).isAdmin;
     final filteredRecords = monthYear == 'Overall' 
         ? allRecords 
         : allRecords.where((r) => r.monthYear == monthYear).toList();
@@ -194,117 +111,164 @@ class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProvider
     var dates = groupedByDate.keys.toList()..sort((a, b) => b.compareTo(a));
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+      padding: const EdgeInsets.all(20),
       itemCount: dates.length,
       itemBuilder: (context, index) {
         String dateKey = dates[index];
         DateTime date = DateTime.parse(dateKey);
         List<BallRecord> records = groupedByDate[dateKey]!;
         
-        // Aggregate records for this date by player
-        Map<String, int> playerTotals = {};
-        for (var r in records) {
-          playerTotals[r.playerName] = (playerTotals[r.playerName] ?? 0) + r.lostCount;
-        }
-
         return Container(
-          margin: const EdgeInsets.only(bottom: 30),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Left side: Calendar style date
-                Container(
-                  width: 80,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF020C3B), Color(0xFF051970)],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5)),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        DateFormat('MMM').format(date).toUpperCase(),
-                        style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 18, letterSpacing: 1),
-                      ),
-                      Text(
-                        DateFormat('dd').format(date),
-                        style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 36, height: 1),
-                      ),
-                      Text(
-                        DateFormat('yyyy').format(date),
-                        style: GoogleFonts.bebasNeue(color: Colors.white38, fontSize: 14),
-                      ),
-                    ],
-                  ),
+          margin: const EdgeInsets.only(bottom: 25),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Calendar Date Card (Consistent with others)
+              Container(
+                width: 65,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF020C3B), Color(0xFF051970)]),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
                 ),
-                const SizedBox(width: 20),
-                // Right side: Table of players
-                Expanded(
-                  child: Container(
+                child: Column(
+                  children: [
+                    Text(DateFormat('MMM').format(date).toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 14)),
+                    Text(DateFormat('dd').format(date), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, height: 1)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 15),
+              // List of records
+              Expanded(
+                child: Column(
+                  children: records.map((r) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF020C3B).withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(25),
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(color: Colors.white10),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(25),
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            color: Colors.white.withOpacity(0.05),
-                            child: Row(
-                              children: [
-                                Expanded(child: Text('PLAYER', style: GoogleFonts.bebasNeue(color: Colors.white60, fontSize: 12, letterSpacing: 1))),
-                                SizedBox(width: 60, child: Center(child: Text('LOST', style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 12, letterSpacing: 1)))),
-                              ],
-                            ),
-                            ),
-                            ...playerTotals.entries.map((entry) {
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                              decoration: BoxDecoration(
-                                border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      entry.key.toUpperCase(),
-                                      style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: 60,
-                                    child: Center(
-                                      child: Text(
-                                        '${entry.value}',
-                                        style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 22),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                            }),                        ],
-                      ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(r.playerName.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              if (r.note != null && r.note!.isNotEmpty)
+                                Text(r.note!, style: const TextStyle(color: Colors.white38, fontSize: 9)),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                          child: Text('${r.lostCount}', style: GoogleFonts.bebasNeue(color: Colors.redAccent, fontSize: 18)),
+                        ),
+                        if (isAdmin) ...[
+                          const SizedBox(width: 10),
+                          _buildActionIcon(Icons.edit_outlined, Colors.blueAccent, () => _showEditRecordDialog(context, r)),
+                          const SizedBox(width: 5),
+                          _buildActionIcon(Icons.delete_outline, Colors.redAccent, () => _showDeleteRecordDialog(context, r)),
+                        ],
+                      ],
                     ),
-                  ),
+                  )).toList(),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildActionIcon(IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+        child: Icon(icon, color: color, size: 16),
+      ),
+    );
+  }
+
+  void _showEditRecordDialog(BuildContext context, BallRecord record) {
+    final controller = TextEditingController(text: record.lostCount.toString());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF020C3B),
+        title: Text('EDIT RECORD', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1.2)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('PLAYER: ${record.playerName}', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+            const SizedBox(height: 15),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'LOST BALLS',
+                labelStyle: TextStyle(color: Colors.white38),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () {
+              int? newVal = int.tryParse(controller.text);
+              if (newVal != null && newVal >= 0) {
+                final updatedRecord = BallRecord(
+                  id: record.id,
+                  playerId: record.playerId,
+                  playerName: record.playerName,
+                  lostCount: newVal,
+                  date: record.date,
+                  recordedBy: record.recordedBy,
+                  monthYear: record.monthYear,
+                  note: record.note,
+                );
+                Provider.of<BallProvider>(context, listen: false).updateRecord(updatedRecord, record.lostCount);
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('UPDATE', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteRecordDialog(BuildContext context, BallRecord record) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF020C3B),
+        title: Text('DELETE RECORD', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1.2)),
+        content: Text('Are you sure you want to delete this record for ${record.playerName}?', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () {
+              Provider.of<BallProvider>(context, listen: false).deleteRecord(record.id!, record.playerId, record.lostCount);
+              Navigator.pop(ctx);
+            },
+            child: const Text('DELETE', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
     );
   }
 }

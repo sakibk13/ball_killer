@@ -5,8 +5,11 @@ import 'package:intl/intl.dart';
 import '../providers/contribution_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/ball_provider.dart';
+import '../providers/fine_provider.dart';
 import '../models/contribution.dart';
+import '../models/fine_payment.dart';
 import '../utils/status_dialog.dart';
+import '../utils/export_service.dart';
 
 class ContributionScreen extends StatefulWidget {
   const ContributionScreen({super.key});
@@ -34,6 +37,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
     _tabController = TabController(length: isAdmin ? 3 : 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ContributionProvider>(context, listen: false).fetchContributions();
+      Provider.of<FineProvider>(context, listen: false).fetchPayments();
       Provider.of<BallProvider>(context, listen: false).fetchPlayers();
     });
   }
@@ -168,8 +172,6 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                       int balls = int.tryParse(_ballCountController.text) ?? 0;
                       int tapes = int.tryParse(_tapeCountController.text) ?? 0;
                       
-                      // For editing, if infoController hasn't changed manually, we might want to regenerate note.
-                      // Simple approach: regenerate if counts changed.
                       List<String> items = [];
                       if (balls > 0) items.add('$balls ball${balls > 1 ? "s" : ""}');
                       if (tapes > 0) items.add('$tapes tape${tapes > 1 ? "s" : ""}');
@@ -178,10 +180,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
                       String manualNote = _infoController.text.trim();
                       String finalNote = manualNote;
                       
-                      // Logic to avoid duplicating "X balls, Y tapes" if it's already in manualNote
                       if (autoNote.isNotEmpty && !manualNote.contains(autoNote)) {
-                         // This is tricky if user edited the note. Let's just use what's in _infoController for edit, 
-                         // or regenerate for new.
                          if (editItem == null) {
                             finalNote = autoNote;
                             if (manualNote.isNotEmpty) finalNote = "$autoNote | $manualNote";
@@ -276,6 +275,7 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<ContributionProvider>(context);
+    final fineProvider = Provider.of<FineProvider>(context);
     final isAdmin = Provider.of<AuthProvider>(context).isAdmin;
 
     return Scaffold(
@@ -284,6 +284,21 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
         title: Text('FINANCIAL RECORDS', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 24, letterSpacing: 1.5)),
         backgroundColor: const Color(0xFF020C3B),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.orange),
+            onPressed: () {
+               if (_tabController.index == 0) {
+                 final summaryData = _getUnifiedSummary(provider, fineProvider);
+                 ExportService.exportFinancialSummaryReport(monthYear: _selectedMonthYear, data: summaryData);
+               } else {
+                 final detailedData = _getUnifiedDetailedList(provider, fineProvider);
+                 ExportService.exportFinancialDetailedReport(monthYear: _selectedMonthYear, contributions: detailedData);
+               }
+            },
+          ),
+          const SizedBox(width: 10),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.orange,
@@ -298,7 +313,10 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: () => provider.fetchContributions(force: true),
+        onRefresh: () async {
+          await provider.fetchContributions(force: true);
+          await fineProvider.fetchPayments();
+        },
         color: Colors.orange,
         child: Column(
           children: [
@@ -307,8 +325,8 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildMonthlyDetailed(provider),
-                  _buildFullHistory(provider),
+                  _buildUnifiedSummary(provider, fineProvider),
+                  _buildUnifiedDetailedCalendar(provider, fineProvider),
                   if (isAdmin) _buildManageTab(provider),
                 ],
               ),
@@ -321,6 +339,255 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
         backgroundColor: Colors.orange, 
         child: const Icon(Icons.add_card, color: Colors.white)
       ) : null,
+    );
+  }
+
+  Map<String, Map<String, double>> _getUnifiedSummary(ContributionProvider p, FineProvider fp) {
+    final contributions = p.getGroupedContributions();
+    final payments = fp.payments;
+    
+    Map<String, Map<String, double>> unified = Map.from(contributions);
+
+    for (var pay in payments) {
+      unified.putIfAbsent(pay.monthYear, () => {});
+      unified[pay.monthYear]![pay.playerName] = (unified[pay.monthYear]![pay.playerName] ?? 0) + pay.amountPaid;
+    }
+
+    if (_selectedMonthYear != 'Overall') {
+      return unified.containsKey(_selectedMonthYear) ? { _selectedMonthYear: unified[_selectedMonthYear]! } : {};
+    }
+    return unified;
+  }
+
+  List<dynamic> _getUnifiedDetailedList(ContributionProvider p, FineProvider fp) {
+    final list = _selectedMonthYear == 'Overall' 
+        ? p.contributions 
+        : p.contributions.where((c) => c.monthYear == _selectedMonthYear).toList();
+    
+    final payments = _selectedMonthYear == 'Overall'
+        ? fp.payments
+        : fp.payments.where((p) => p.monthYear == _selectedMonthYear).toList();
+
+    List<dynamic> combined = [...list, ...payments];
+    combined.sort((a, b) => b.date.compareTo(a.date));
+    return combined;
+  }
+
+  Widget _buildUnifiedSummary(ContributionProvider p, FineProvider fp) {
+    final data = _getUnifiedSummary(p, fp);
+
+    if (data.isEmpty) return const Center(child: Text('No records found for this period', style: TextStyle(color: Colors.white24)));
+    
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: data.length,
+      itemBuilder: (ctx, i) {
+        String monthKey = data.keys.elementAt(i);
+        Map<String, double> players = data[monthKey]!;
+        double total = players.values.fold(0, (s, v) => s + v);
+        
+        DateTime date = DateFormat('MM-yyyy').parse(monthKey);
+        String monthName = DateFormat('MMMM yyyy').format(date);
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF020C3B),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white10),
+            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 5))],
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.03),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(monthName.toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 22, letterSpacing: 1)),
+                        Text('TOTAL COLLECTION', style: GoogleFonts.poppins(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                      decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                      child: Text('${total.toStringAsFixed(0)} ৳', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 24)),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: players.entries.map((e) {
+                    final contribs = p.contributions.where((c) => c.name == e.key && c.monthYear == monthKey).toList();
+                    final fines = fp.payments.where((pay) => pay.playerName == e.key && pay.monthYear == monthKey).toList();
+                    
+                    String status = "";
+                    if (contribs.isNotEmpty) status += "Contrib: ${contribs.length} ";
+                    if (fines.isNotEmpty) status += "Fine: ${fines.length}";
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Container(width: 4, height: 25, decoration: BoxDecoration(color: Colors.orange.withOpacity(0.5), borderRadius: BorderRadius.circular(2))),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(e.key, style: GoogleFonts.poppins(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                                      Text(status, style: const TextStyle(color: Colors.white24, fontSize: 10)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text('${e.value.toStringAsFixed(0)} ৳', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 20)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildUnifiedDetailedCalendar(ContributionProvider p, FineProvider fp) {
+    final combined = _getUnifiedDetailedList(p, fp);
+    
+    if (combined.isEmpty) return const Center(child: Text('No transactions found', style: TextStyle(color: Colors.white24)));
+
+    // Group by Date
+    Map<String, List<dynamic>> grouped = {};
+    for (var item in combined) {
+      String dateStr = DateFormat('yyyy-MM-dd').format(item.date);
+      grouped.putIfAbsent(dateStr, () => []);
+      grouped[dateStr]!.add(item);
+    }
+
+    var dates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(20),
+      itemCount: dates.length,
+      itemBuilder: (context, index) {
+        String dateKey = dates[index];
+        DateTime date = DateTime.parse(dateKey);
+        List<dynamic> items = grouped[dateKey]!;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 25),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Date Card
+              Container(
+                width: 65,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF020C3B), Color(0xFF051970)]),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                ),
+                child: Column(
+                  children: [
+                    Text(DateFormat('MMM').format(date).toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 14)),
+                    Text(DateFormat('dd').format(date), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, height: 1)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 15),
+              // Items List
+              Expanded(
+                child: Column(
+                  children: items.map((item) {
+                    bool isFine = item is FinePayment;
+                    String name = isFine ? item.playerName : item.name;
+                    String note = isFine ? "Fine Collection${item.note != null && item.note!.isNotEmpty ? " | " + item.note! : ""}" : item.ballTape;
+                    double amount = isFine ? item.amountPaid : item.taka;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: isFine ? Colors.greenAccent.withOpacity(0.2) : Colors.white10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                Text(note, style: TextStyle(color: isFine ? Colors.greenAccent.withOpacity(0.5) : Colors.white38, fontSize: 9)),
+                              ],
+                            ),
+                          ),
+                          Text('${amount.toInt()} ৳', style: GoogleFonts.bebasNeue(color: isFine ? Colors.greenAccent : Colors.white70, fontSize: 18)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMonthPicker() {
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      color: const Color(0xFF020C3B),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 15),
+        itemCount: _monthList.length,
+        itemBuilder: (context, index) {
+          final m = _monthList[index];
+          final isSelected = _selectedMonthYear == m;
+          String display = m == 'Overall' ? 'OVERALL' : DateFormat('MMM yy').format(DateFormat('MM-yyyy').parse(m)).toUpperCase();
+          return GestureDetector(
+            onTap: () => setState(() => _selectedMonthYear = m),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                gradient: isSelected ? const LinearGradient(colors: [Colors.orange, Colors.deepOrange]) : null,
+                color: isSelected ? null : Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: isSelected ? Colors.orange : Colors.white10),
+              ),
+              alignment: Alignment.center,
+              child: Text(display, style: GoogleFonts.bebasNeue(color: isSelected ? Colors.white : Colors.white38, fontSize: 14)),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -388,188 +655,6 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildMonthPicker() {
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      color: const Color(0xFF020C3B),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 15),
-        itemCount: _monthList.length,
-        itemBuilder: (context, index) {
-          final m = _monthList[index];
-          final isSelected = _selectedMonthYear == m;
-          String display = m == 'Overall' ? 'OVERALL' : DateFormat('MMM yy').format(DateFormat('MM-yyyy').parse(m)).toUpperCase();
-          return GestureDetector(
-            onTap: () => setState(() => _selectedMonthYear = m),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                gradient: isSelected ? const LinearGradient(colors: [Colors.orange, Colors.deepOrange]) : null,
-                color: isSelected ? null : Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: isSelected ? Colors.orange : Colors.white10),
-              ),
-              alignment: Alignment.center,
-              child: Text(display, style: GoogleFonts.bebasNeue(color: isSelected ? Colors.white : Colors.white38, fontSize: 14)),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildMonthlyDetailed(ContributionProvider p) {
-    final allData = p.getGroupedContributions();
-    final data = _selectedMonthYear == 'Overall' 
-        ? allData 
-        : (allData.containsKey(_selectedMonthYear) ? { _selectedMonthYear: allData[_selectedMonthYear]! } : <String, Map<String, double>>{});
-
-    if (data.isEmpty) return const Center(child: Text('No records found for this period', style: TextStyle(color: Colors.white24)));
-    
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: data.length,
-      itemBuilder: (ctx, i) {
-        String monthKey = data.keys.elementAt(i);
-        Map<String, double> players = data[monthKey]!;
-        double total = players.values.fold(0, (s, v) => s + v);
-        
-        DateTime date = DateFormat('MM-yyyy').parse(monthKey);
-        String monthName = DateFormat('MMMM yyyy').format(date);
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 24),
-          decoration: BoxDecoration(
-            color: const Color(0xFF020C3B),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white10),
-            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 5))],
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.03),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(monthName.toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 22, letterSpacing: 1)),
-                        Text('COLLECTION SUMMARY', style: GoogleFonts.poppins(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-                      decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                      child: Text('${total.toStringAsFixed(0)} ৳', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 24)),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: players.entries.map((e) {
-                    final personLogs = p.contributions.where((c) => c.name == e.key && c.monthYear == monthKey).toList();
-                    final datesStr = personLogs.map((c) => DateFormat('dd').format(c.date)).toSet().join(", ");
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Container(width: 4, height: 25, decoration: BoxDecoration(color: Colors.orange.withOpacity(0.5), borderRadius: BorderRadius.circular(2))),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(e.key, style: GoogleFonts.poppins(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                                      Text('Dates: $datesStr', style: const TextStyle(color: Colors.white24, fontSize: 10)),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text('${e.value.toStringAsFixed(0)} ৳', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 20)),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildFullHistory(ContributionProvider p) {
-    final list = _selectedMonthYear == 'Overall' 
-        ? p.contributions 
-        : p.contributions.where((c) => c.monthYear == _selectedMonthYear).toList();
-    
-    if (list.isEmpty) return const Center(child: Text('No transaction history for this period', style: TextStyle(color: Colors.white24)));
-    
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: list.length,
-      itemBuilder: (ctx, i) {
-        final item = list[i];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05), 
-            borderRadius: BorderRadius.circular(20), 
-            border: Border.all(color: Colors.white10)
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 55,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                child: Column(
-                  children: [
-                    Text(DateFormat('dd').format(item.date), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 22)),
-                    Text(DateFormat('MMM').format(item.date).toUpperCase(), style: const TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.name, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                    if (item.ballTape.isNotEmpty) 
-                      Text(item.ballTape, style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                  ],
-                ),
-              ),
-              Text('${item.taka.toStringAsFixed(0)} ৳', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 22)),
-            ],
-          ),
-        );
-      },
     );
   }
 }

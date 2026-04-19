@@ -5,6 +5,7 @@ import '../models/player.dart';
 import '../models/ball_record.dart';
 import '../models/contribution.dart';
 import '../models/inventory.dart';
+import '../models/fine_payment.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -18,6 +19,35 @@ class DatabaseService {
 
   Future<bool> connect() async {
     return true;
+  }
+
+  // Fine Payment operations
+  Future<List<FinePayment>> getFinePayments() async {
+    try {
+      final snap = await _db.collection('fine_payments').orderBy('date', descending: true).get();
+      return snap.docs.map((doc) => FinePayment.fromMap(doc.data(), docId: doc.id)).toList();
+    } catch (e) {
+      debugPrint('!!! GET FINE PAYMENTS ERROR: $e');
+      return [];
+    }
+  }
+
+  Future<bool> addFinePayment(FinePayment payment) async {
+    try {
+      await _db.collection('fine_payments').add(payment.toMap());
+      return true;
+    } catch (e) {
+      debugPrint('!!! ADD FINE PAYMENT ERROR: $e');
+      return false;
+    }
+  }
+
+  Future<void> deleteFinePayment(String id) async {
+    try {
+      await _db.collection('fine_payments').doc(id).delete();
+    } catch (e) {
+      debugPrint('!!! DELETE FINE PAYMENT ERROR: $e');
+    }
   }
 
   // Inventory operations
@@ -124,7 +154,7 @@ class DatabaseService {
       final existingUser = await _db.collection('users').where('phone', isEqualTo: user.phone).limit(1).get();
       if (existingUser.docs.isNotEmpty) {
         debugPrint('!!! REGISTRATION: User already exists in login system');
-        return false;
+        throw 'Phone number already registered. Try a new number.';
       }
       
       // 2. Create the user entry
