@@ -118,17 +118,20 @@ class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProvider
         DateTime date = DateTime.parse(dateKey);
         List<BallRecord> records = groupedByDate[dateKey]!;
 
-        // SUMMARIZE DUPLICATES: Group by player and sum lostCount
+        // NET CALCULATION: Group by player and sum lostCount (allowing negatives to offset)
         Map<String, int> summarized = {};
-        Map<String, List<BallRecord>> originalRecords = {}; // For edit/delete access
+        Map<String, List<BallRecord>> originalRecords = {}; 
         for (var r in records) {
           summarized[r.playerName] = (summarized[r.playerName] ?? 0) + r.lostCount;
           originalRecords.putIfAbsent(r.playerName, () => []);
           originalRecords[r.playerName]!.add(r);
         }
 
-        var playerNames = summarized.keys.toList()..sort();
+        // FILTER: Only show players who have a Net Loss > 0
+        var playerNames = summarized.keys.where((name) => summarized[name]! > 0).toList()..sort();
         
+        if (playerNames.isEmpty) return const SizedBox.shrink(); // Hide the date group if no net losses
+
         return Container(
           margin: const EdgeInsets.only(bottom: 25),
           child: Row(
@@ -155,7 +158,7 @@ class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProvider
               Expanded(
                 child: Column(
                   children: playerNames.map((name) {
-                    final totalLost = summarized[name]?.abs() ?? 0; // Force absolute
+                    final totalLost = summarized[name];
                     final originals = originalRecords[name]!;
 
                     return Container(
@@ -174,7 +177,7 @@ class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProvider
                               children: [
                                 Text(name.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                                 if (originals.length > 1)
-                                  Text('${originals.length} entries added', style: const TextStyle(color: Colors.white24, fontSize: 9)),
+                                  Text('${originals.length} entries summarized', style: const TextStyle(color: Colors.white24, fontSize: 9)),
                               ],
                             ),
                           ),
@@ -185,7 +188,6 @@ class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProvider
                           ),
                           if (isAdmin) ...[
                             const SizedBox(width: 10),
-                            // If summarized, we show access to the first record for simplicity, or provide a way to see all
                             _buildActionIcon(Icons.edit_outlined, Colors.blueAccent, () => _showEditRecordDialog(context, originals.first)),
                             const SizedBox(width: 5),
                             _buildActionIcon(Icons.delete_outline, Colors.redAccent, () => _showDeleteRecordDialog(context, originals.first)),
@@ -246,7 +248,7 @@ class _RecordsScreenState extends State<RecordsScreen> with SingleTickerProvider
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             onPressed: () {
               int? newVal = int.tryParse(controller.text);
-              if (newVal != null && newVal >= 0) {
+              if (newVal != null) {
                 final updatedRecord = BallRecord(
                   id: record.id,
                   playerId: record.playerId,

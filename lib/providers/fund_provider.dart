@@ -9,7 +9,12 @@ class FundProvider with ChangeNotifier {
   List<Fund> get funds => _funds;
   bool get isLoading => _isLoading;
 
-  double get grandTotal => _funds.fold(0, (sum, item) => sum + item.amount);
+  double get grandTotal => _funds.fold(0, (sum, item) {
+    if (item.type == 'EXPENSE') {
+      return sum - item.amount;
+    }
+    return sum + item.amount;
+  });
 
   Future<void> fetchFunds() async {
     _isLoading = true;

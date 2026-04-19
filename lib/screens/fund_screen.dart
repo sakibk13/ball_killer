@@ -129,7 +129,11 @@ class _FundScreenState extends State<FundScreen> {
         String dateKey = dates[index];
         DateTime date = DateTime.parse(dateKey);
         List<Fund> items = grouped[dateKey]!;
-        double dailyTotal = items.fold(0, (sum, item) => sum + item.amount);
+        
+        // Calculate daily net total
+        double dailyTotal = items.fold(0, (sum, item) {
+          return item.type == 'EXPENSE' ? sum - item.amount : sum + item.amount;
+        });
 
         return Container(
           margin: const EdgeInsets.only(bottom: 25),
@@ -150,7 +154,7 @@ class _FundScreenState extends State<FundScreen> {
                     Text(DateFormat('MMM').format(date).toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 14)),
                     Text(DateFormat('dd').format(date), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, height: 1)),
                     const SizedBox(height: 5),
-                    Text('${dailyTotal.toInt()}', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 12)),
+                    Text('${dailyTotal.toInt()}', style: GoogleFonts.bebasNeue(color: dailyTotal >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: 12)),
                   ],
                 ),
               ),
@@ -163,7 +167,7 @@ class _FundScreenState extends State<FundScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.white10),
+                      border: Border.all(color: f.type == 'EXPENSE' ? Colors.redAccent.withOpacity(0.1) : Colors.white10),
                     ),
                     child: Row(
                       children: [
@@ -174,10 +178,14 @@ class _FundScreenState extends State<FundScreen> {
                               Text(f.name.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                               if (f.note != null && f.note!.isNotEmpty)
                                 Text(f.note!, style: const TextStyle(color: Colors.white38, fontSize: 9)),
+                              Text(f.type, style: TextStyle(color: f.type == 'EXPENSE' ? Colors.redAccent : Colors.greenAccent, fontSize: 8, fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ),
-                        Text('${f.amount.toInt()} ৳', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 18)),
+                        Text(
+                          '${f.type == 'EXPENSE' ? '-' : ''}${f.amount.toInt()} ৳', 
+                          style: GoogleFonts.bebasNeue(color: f.type == 'EXPENSE' ? Colors.redAccent : Colors.greenAccent, fontSize: 18)
+                        ),
                         if (isAdmin) ...[
                           const SizedBox(width: 10),
                           GestureDetector(
@@ -203,7 +211,7 @@ class _FundScreenState extends State<FundScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF020C3B),
         title: Text('DELETE ENTRY', style: GoogleFonts.bebasNeue(color: Colors.white)),
-        content: Text('Remove this entry of ${fund.amount.toInt()} ৳?', style: GoogleFonts.poppins(color: Colors.white70)),
+        content: Text('Remove this entry of ${fund.amount.toInt()}?', style: GoogleFonts.poppins(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
           TextButton(
@@ -225,6 +233,7 @@ class _FundScreenState extends State<FundScreen> {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
     DateTime selectedDate = DateTime.now();
+    String entryType = 'INCOME';
 
     showDialog(
       context: context,
@@ -236,18 +245,51 @@ class _FundScreenState extends State<FundScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // INCOME / EXPENSE Toggle
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialogState(() => entryType = 'INCOME'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: entryType == 'INCOME' ? Colors.greenAccent.withOpacity(0.2) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text('INCOME', style: GoogleFonts.bebasNeue(color: entryType == 'INCOME' ? Colors.greenAccent : Colors.white24)),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialogState(() => entryType = 'EXPENSE'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: entryType == 'EXPENSE' ? Colors.redAccent.withOpacity(0.2) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text('EXPENSE', style: GoogleFonts.bebasNeue(color: entryType == 'EXPENSE' ? Colors.redAccent : Colors.white24)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
                 Autocomplete<String>(
                   optionsBuilder: (TextEditingValue textEditingValue) {
-                    if (textEditingValue.text == '') {
-                      return const Iterable<String>.empty();
-                    }
-                    return players
-                        .where((p) => p.name.toLowerCase().contains(textEditingValue.text.toLowerCase()))
-                        .map((p) => p.name);
+                    if (textEditingValue.text == '') return const Iterable<String>.empty();
+                    return players.where((p) => p.name.toLowerCase().contains(textEditingValue.text.toLowerCase())).map((p) => p.name);
                   },
-                  onSelected: (String selection) {
-                    nameController.text = selection;
-                  },
+                  onSelected: (String selection) { nameController.text = selection; },
                   fieldViewBuilder: (ctx, ctrl, focus, onSub) => TextFormField(
                     controller: ctrl,
                     focusNode: focus,
@@ -330,18 +372,13 @@ class _FundScreenState extends State<FundScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
               onPressed: () async {
-                final String name = nameController.text.isEmpty 
-                    ? (players.any((p) => p.name.toLowerCase() == nameController.text.toLowerCase()) 
-                        ? nameController.text 
-                        : nameController.text) 
-                    : nameController.text;
-                
-                if (name.isNotEmpty && amountController.text.isNotEmpty) {
+                if (nameController.text.isNotEmpty && amountController.text.isNotEmpty) {
                   final fund = Fund(
-                    name: name,
+                    name: nameController.text,
                     amount: double.parse(amountController.text),
                     date: selectedDate,
                     note: noteController.text,
+                    type: entryType,
                   );
                   final success = await Provider.of<FundProvider>(context, listen: false).addFund(fund);
                   if (success) {

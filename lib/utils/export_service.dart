@@ -49,7 +49,8 @@ class ExportService {
               columnWidths: {
                 0: const pw.FixedColumnWidth(80), 
                 1: const pw.FlexColumnWidth(), 
-                2: const pw.FixedColumnWidth(100)
+                2: const pw.FixedColumnWidth(60),
+                3: const pw.FixedColumnWidth(80)
               },
               children: [
                 pw.TableRow(
@@ -57,15 +58,18 @@ class ExportService {
                   children: [
                     _buildHeaderCell('DATE', align: pw.TextAlign.center), 
                     _buildHeaderCell('NAME / SOURCE'), 
+                    _buildHeaderCell('TYPE', align: pw.TextAlign.center),
                     _buildHeaderCell('AMOUNT', align: pw.TextAlign.right),
                   ],
                 ),
                 ...funds.map((f) {
+                  final isExpense = f.type == 'EXPENSE';
                   return pw.TableRow(
                     children: [
                       _buildDataCell(DateFormat('dd MMM, yyyy').format(f.date), align: pw.TextAlign.center),
                       _buildDataCell(f.name.toUpperCase(), fontWeight: pw.FontWeight.bold),
-                      _buildDataCell('${f.amount.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold),
+                      _buildDataCell(f.type, align: pw.TextAlign.center, color: isExpense ? PdfColors.red700 : PdfColors.green700, fontSize: 7),
+                      _buildDataCell('${isExpense ? '-' : ''}${f.amount.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, color: isExpense ? PdfColors.red700 : PdfColors.black),
                     ],
                   );
                 }),
@@ -73,7 +77,8 @@ class ExportService {
                   decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                   children: [
                     pw.SizedBox(),
-                    _buildDataCell('TOTAL COLLECTION', fontWeight: pw.FontWeight.bold),
+                    _buildDataCell('AVAILABLE FUND BALANCE', fontWeight: pw.FontWeight.bold),
+                    pw.SizedBox(),
                     _buildDataCell('${grandTotal.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
                   ],
                 ),
@@ -452,7 +457,6 @@ class ExportService {
   }
 
   static Future<void> _saveAndDownload(Uint8List bytes, String fileName) async {
-    // Standard sharing for all screens
     await Printing.sharePdf(
       bytes: bytes,
       filename: fileName,
@@ -475,21 +479,17 @@ class ExportService {
     }
   }
 
-  static Future<String> downloadMultiplePdfs(List<Uint8List> pdfs, List<String> filenames) async {
-    // On Android, we try to save to the Downloads folder.
-    // On iOS, it stays in the App's Documents folder.
-    String path = "";
-    if (Platform.isAndroid) {
-      path = "/storage/emulated/0/Download";
-    } else {
-      final dir = await getApplicationDocumentsDirectory();
-      path = dir.path;
-    }
+  static Future<void> downloadMultiplePdfs(List<Uint8List> pdfs, List<String> filenames) async {
+    final tempDir = await getTemporaryDirectory();
+    final List<XFile> xFiles = [];
 
     for (int i = 0; i < pdfs.length; i++) {
-      final file = File('$path/${filenames[i]}');
+      final file = File('${tempDir.path}/${filenames[i]}');
       await file.writeAsBytes(pdfs[i]);
+      xFiles.add(XFile(file.path));
     }
-    return path;
+
+    // Trigger the system "Save to device" dialog for multiple files
+    await Share.shareXFiles(xFiles, text: 'Download club reports');
   }
 }

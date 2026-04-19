@@ -6,6 +6,7 @@ class Fund {
   final double amount;
   final DateTime date;
   final String? note;
+  final String type; // 'INCOME' or 'EXPENSE'
 
   Fund({
     this.id,
@@ -13,6 +14,7 @@ class Fund {
     required this.amount,
     required this.date,
     this.note,
+    this.type = 'INCOME', // Default to income
   });
 
   Map<String, dynamic> toMap() {
@@ -21,6 +23,7 @@ class Fund {
       'amount': amount,
       'date': Timestamp.fromDate(date),
       'note': note,
+      'type': type,
     };
   }
 
@@ -31,6 +34,7 @@ class Fund {
       amount: (map['amount'] ?? 0).toDouble(),
       date: (map['date'] as Timestamp).toDate(),
       note: map['note'],
+      type: map['type'] ?? 'INCOME',
     );
   }
 }
