@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 
 import '../models/contribution.dart';
@@ -89,7 +90,7 @@ class ExportService {
         },
       ),
     );
-    await _saveAndShare(pdf, 'financial_summary_${monthYear.replaceAll('-', '_')}.pdf');
+    await _saveAndDownload(pdf, 'financial_summary_${monthYear.replaceAll('-', '_')}.pdf');
   }
 
   static Future<void> exportFinancialDetailedReport({
@@ -173,7 +174,7 @@ class ExportService {
         },
       ),
     );
-    await _saveAndShare(pdf, 'financial_detailed_${monthYear.replaceAll('-', '_')}.pdf');
+    await _saveAndDownload(pdf, 'financial_detailed_${monthYear.replaceAll('-', '_')}.pdf');
   }
 
   static Future<void> exportLeaderboard({
@@ -217,19 +218,19 @@ class ExportService {
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
               columnWidths: {
-                0: const pw.FixedColumnWidth(25), 
-                1: const pw.FixedColumnWidth(35),
-                2: const pw.FixedColumnWidth(180), 
-                3: const pw.FlexColumnWidth()
+                0: const pw.FlexColumnWidth(1.0), 
+                1: const pw.FlexColumnWidth(1.0),
+                2: const pw.FlexColumnWidth(2.5), 
+                3: const pw.FlexColumnWidth(1.0)
               },
               children: [
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.blue900),
                   children: [
-                    _buildHeaderCell('RK'), 
-                    _buildHeaderCell('Photo'),
+                    _buildHeaderCell('RANK', align: pw.TextAlign.center), 
+                    _buildHeaderCell('PHOTO', align: pw.TextAlign.center),
                     _buildHeaderCell('PLAYER NAME'), 
-                    _buildHeaderCell('LOST'),
+                    _buildHeaderCell('LOST', align: pw.TextAlign.center),
                   ],
                 ),
                 ...sortedPlayers.asMap().entries.map((entry) {
@@ -247,10 +248,10 @@ class ExportService {
                     children: [
                       _buildDataCell('${i + 1}', align: pw.TextAlign.center),
                       pw.Padding(
-                        padding: const pw.EdgeInsets.all(2),
+                        padding: const pw.EdgeInsets.all(3),
                         child: pw.Center(
                           child: pw.Container(
-                            height: 22, width: 22,
+                            height: 25, width: 25,
                             decoration: pw.BoxDecoration(
                               shape: pw.BoxShape.circle,
                               color: PdfColors.grey200,
@@ -271,7 +272,7 @@ class ExportService {
         },
       ),
     );
-    await _saveAndShare(pdf, 'leaderboard_${monthYear.replaceAll('-', '_')}.pdf');
+    await _saveAndDownload(pdf, 'leaderboard_${monthYear.replaceAll('-', '_')}.pdf');
   }
 
   static Future<void> exportFineReport({
@@ -308,25 +309,25 @@ class ExportService {
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
               columnWidths: {
-                0: const pw.FixedColumnWidth(22), 
-                1: const pw.FixedColumnWidth(32),
-                2: const pw.FixedColumnWidth(160), 
-                3: const pw.FixedColumnWidth(30), 
-                4: const pw.FlexColumnWidth(),
-                5: const pw.FlexColumnWidth(),
-                6: const pw.FlexColumnWidth(),
+                0: const pw.FlexColumnWidth(1.0), 
+                1: const pw.FlexColumnWidth(1.0),
+                2: const pw.FlexColumnWidth(2.5), 
+                3: const pw.FlexColumnWidth(1.0), 
+                4: const pw.FlexColumnWidth(1.2),
+                5: const pw.FlexColumnWidth(1.2),
+                6: const pw.FlexColumnWidth(1.2),
               },
               children: [
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.blue900),
                   children: [
-                    _buildHeaderCell('RK'), 
-                    _buildHeaderCell('Photo'),
+                    _buildHeaderCell('RANK', align: pw.TextAlign.center), 
+                    _buildHeaderCell('PHOTO', align: pw.TextAlign.center),
                     _buildHeaderCell('PLAYER NAME'), 
-                    _buildHeaderCell('LST'), 
-                    _buildHeaderCell('TOTAL'),
-                    _buildHeaderCell('GIVEN'),
-                    _buildHeaderCell('DUE'),
+                    _buildHeaderCell('LOST', align: pw.TextAlign.center), 
+                    _buildHeaderCell('TOTAL', align: pw.TextAlign.right),
+                    _buildHeaderCell('GIVEN', align: pw.TextAlign.right),
+                    _buildHeaderCell('DUE', align: pw.TextAlign.right),
                   ],
                 ),
                 ...sortedPlayers.asMap().entries.where((e) => (e.value['total'] as int) > 0).map((entry) {
@@ -346,9 +347,9 @@ class ExportService {
                   
                   return pw.TableRow(
                     children: [
-                      _buildDataCell('${i + 1}', align: pw.TextAlign.center),
+                      _buildDataCell('${i + 1}', align: pw.TextAlign.center, fontSize: 8),
                       pw.Padding(
-                        padding: const pw.EdgeInsets.all(1),
+                        padding: const pw.EdgeInsets.all(2),
                         child: pw.Center(
                           child: pw.Container(
                             height: 20, width: 20,
@@ -361,11 +362,11 @@ class ExportService {
                           ),
                         ),
                       ),
-                      _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold, fontSize: 7, softWrap: false),
-                      _buildDataCell('$lost', align: pw.TextAlign.center, fontSize: 7),
-                      _buildDataCell('${fine.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, fontSize: 7),
-                      _buildDataCell('${given.toInt()}', align: pw.TextAlign.right, color: PdfColors.green700, fontSize: 7),
-                      _buildDataCell('${due.toInt()}', align: pw.TextAlign.right, color: due > 0 ? PdfColors.red700 : PdfColors.green700, fontWeight: pw.FontWeight.bold, fontSize: 7),
+                      _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold, fontSize: 8, softWrap: false),
+                      _buildDataCell('$lost', align: pw.TextAlign.center, fontSize: 8),
+                      _buildDataCell('${fine.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, fontSize: 8),
+                      _buildDataCell('${given.toInt()}', align: pw.TextAlign.right, color: PdfColors.green700, fontSize: 8),
+                      _buildDataCell('${due.toInt()}', align: pw.TextAlign.right, color: due > 0 ? PdfColors.red700 : PdfColors.green700, fontWeight: pw.FontWeight.bold, fontSize: 8),
                     ],
                   );
                 }),
@@ -377,7 +378,7 @@ class ExportService {
         },
       ),
     );
-    await _saveAndShare(pdf, 'fine_report_${monthYear.replaceAll('-', '_')}.pdf');
+    await _saveAndDownload(pdf, 'fine_report_${monthYear.replaceAll('-', '_')}.pdf');
   }
 
   static pw.Widget _buildPdfHeader(String title, pw.MemoryImage? logo) {
@@ -422,8 +423,16 @@ class ExportService {
     );
   }
 
-  static pw.Widget _buildHeaderCell(String text) {
-    return pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(text, style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 8)));
+  static pw.Widget _buildHeaderCell(String text, {pw.TextAlign align = pw.TextAlign.left}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(6), 
+      child: pw.Text(
+        text, 
+        textAlign: align,
+        softWrap: false,
+        style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 8)
+      )
+    );
   }
 
   static pw.Widget _buildDataCell(String text, {pw.TextAlign align = pw.TextAlign.left, pw.FontWeight? fontWeight, PdfColor? color, double fontSize = 8, bool softWrap = true}) {
@@ -438,10 +447,12 @@ class ExportService {
     );
   }
 
-  static Future<void> _saveAndShare(pw.Document pdf, String fileName) async {
-    final output = await getTemporaryDirectory();
-    final file = File("${output.path}/$fileName");
-    await file.writeAsBytes(await pdf.save());
-    await Share.shareXFiles([XFile(file.path)], text: 'Ball Killer Club Report');
+  static Future<void> _saveAndDownload(pw.Document pdf, String fileName) async {
+    // We use Printing.sharePdf because it opens the share sheet which HAS the "Save to Files" (Download) option 
+    // on both iOS and Android. This avoids the system Print dialog.
+    await Printing.sharePdf(
+      bytes: await pdf.save(),
+      filename: fileName,
+    );
   }
 }
