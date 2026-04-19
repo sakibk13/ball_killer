@@ -8,6 +8,7 @@ import '../providers/fine_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/fine_payment.dart';
 import '../utils/export_service.dart';
+import '../services/sms_service.dart';
 
 class FineScreen extends StatefulWidget {
   const FineScreen({super.key});
@@ -331,7 +332,21 @@ class _FineScreenState extends State<FineScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text('$total BALLS', style: GoogleFonts.bebasNeue(color: i == 0 ? Colors.redAccent : Colors.white70, fontSize: 15)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (Provider.of<AuthProvider>(context, listen: false).isAdmin)
+                            IconButton(
+                              icon: const Icon(Icons.message_outlined, color: Colors.orange, size: 18),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _showCustomSmsDialog(context, p, total, fine, given, due),
+                            ),
+                          if (Provider.of<AuthProvider>(context, listen: false).isAdmin)
+                            const SizedBox(width: 10),
+                          Text('$total BALLS', style: GoogleFonts.bebasNeue(color: i == 0 ? Colors.redAccent : Colors.white70, fontSize: 15)),
+                        ],
+                      ),
                       if (total > 0)
                         Text('FINE: ${fine.toInt()}', style: GoogleFonts.bebasNeue(color: Colors.yellowAccent, fontSize: 13)),
                     ],
@@ -355,6 +370,65 @@ class _FineScreenState extends State<FineScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _showCustomSmsDialog(BuildContext context, Map<String, dynamic> player, int lost, double fine, double given, double due) {
+    final String initialMsg = SmsService.generateFineMessage(
+      name: player['name'],
+      ballsLost: lost,
+      totalFine: fine,
+      givenAmount: given,
+      dueAmount: due,
+    );
+    final controller = TextEditingController(text: initialMsg);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF020C3B),
+        title: Text('SEND SMS TO ${player['name'].toString().toUpperCase()}', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1.2)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Number: ${player['phone']}', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+            const SizedBox(height: 15),
+            TextField(
+              controller: controller,
+              maxLines: 5,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final success = await SmsService.sendCustomSms(
+                phoneNumber: player['phone'],
+                message: controller.text,
+              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(success ? "SMS sent to ${player['name']}" : "Failed to send SMS. Check your BulkSMSBD balance."),
+                    backgroundColor: success ? Colors.green : Colors.red,
+                  )
+                );
+              }
+            },
+            child: const Text('SEND NOW', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
