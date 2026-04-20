@@ -8,6 +8,7 @@ import '../providers/fund_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/fund.dart';
 import '../utils/export_service.dart';
+import '../utils/csv_export_service.dart';
 
 class FundScreen extends StatefulWidget {
   const FundScreen({super.key});
@@ -28,21 +29,27 @@ class _FundScreenState extends State<FundScreen> {
   @override
   Widget build(BuildContext context) {
     final fundProvider = Provider.of<FundProvider>(context);
+    final ballProvider = Provider.of<BallProvider>(context);
     final isAdmin = Provider.of<AuthProvider>(context, listen: false).isAdmin;
 
     return Scaffold(
       backgroundColor: const Color(0xFF051970),
       appBar: AppBar(
-        title: Text('CLUB FUND', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1.2)),
+        title: Text('Club Fund', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1.2)),
         backgroundColor: const Color(0xFF020C3B),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.table_view_outlined, color: Colors.greenAccent),
+            onPressed: () => CsvExportService.exportFundsToCsv(fundProvider.funds),
+          ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.orange),
             onPressed: () {
               ExportService.exportFundReport(
                 funds: fundProvider.funds,
                 grandTotal: fundProvider.grandTotal,
+                players: ballProvider.players,
               );
             },
           ),
@@ -51,7 +58,7 @@ class _FundScreenState extends State<FundScreen> {
       ),
       body: Column(
         children: [
-          _buildGrandTotalCard(fundProvider.grandTotal),
+          _buildStylishBalanceCard(fundProvider.grandTotal),
           Expanded(
             child: fundProvider.isLoading 
                 ? const Center(child: CircularProgressIndicator(color: Colors.orange))
@@ -67,27 +74,37 @@ class _FundScreenState extends State<FundScreen> {
     );
   }
 
-  Widget _buildGrandTotalCard(double total) {
+  Widget _buildStylishBalanceCard(double total) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(30),
+      margin: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF00C853), Color(0xFF1B5E20)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(25),
         boxShadow: [
-          BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 20, spreadRadius: 5)
+          BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))
         ],
       ),
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('AVAILABLE FUND BALANCE', style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 18, letterSpacing: 1.5)),
-          const SizedBox(height: 10),
-          Text('${total.toInt()} ৳', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 48, letterSpacing: 2)),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Available Balance', style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
+              Text('${total.toInt()} ৳', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 36, letterSpacing: 1)),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
+            child: const Icon(Icons.account_balance_wallet_outlined, color: Colors.white, size: 28),
+          ),
         ],
       ),
     );
@@ -101,13 +118,12 @@ class _FundScreenState extends State<FundScreen> {
           children: [
             const Icon(Icons.account_balance_wallet_outlined, color: Colors.white10, size: 80),
             const SizedBox(height: 20),
-            Text('NO FUND HISTORY', style: GoogleFonts.bebasNeue(color: Colors.white24, fontSize: 24)),
+            Text('No History Found', style: GoogleFonts.bebasNeue(color: Colors.white24, fontSize: 24)),
           ],
         ),
       );
     }
 
-    // Group by Month-Year
     Map<String, List<Fund>> monthGroups = {};
     for (var f in provider.funds) {
       String monthKey = DateFormat('MMMM yyyy').format(f.date);
@@ -115,7 +131,11 @@ class _FundScreenState extends State<FundScreen> {
       monthGroups[monthKey]!.add(f);
     }
 
-    var sortedMonths = monthGroups.keys.toList()..sort((a, b) {
+    // FILTER: Only show months from April 2026 onwards
+    DateTime minDate = DateTime(2026, 4, 1);
+    var sortedMonths = monthGroups.keys.where((m) {
+      return DateFormat('MMMM yyyy').parse(m).isAfter(minDate.subtract(const Duration(days: 1)));
+    }).toList()..sort((a, b) {
       DateTime da = DateFormat('MMMM yyyy').parse(a);
       DateTime db = DateFormat('MMMM yyyy').parse(b);
       return db.compareTo(da);
@@ -127,11 +147,8 @@ class _FundScreenState extends State<FundScreen> {
       itemBuilder: (context, mIndex) {
         String monthName = sortedMonths[mIndex];
         List<Fund> monthFunds = monthGroups[monthName]!;
-        
-        // Calculate month total
         double monthNet = monthFunds.fold(0, (sum, f) => f.type == 'EXPENSE' ? sum - f.amount : sum + f.amount);
 
-        // Group by Date within Month
         Map<String, List<Fund>> dailyGroups = {};
         for (var f in monthFunds) {
           String dateKey = DateFormat('yyyy-MM-dd').format(f.date);
@@ -143,51 +160,44 @@ class _FundScreenState extends State<FundScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Month Header
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
+              padding: const EdgeInsets.symmetric(vertical: 15),
               child: Row(
                 children: [
-                  Container(width: 4, height: 25, decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(2))),
-                  const SizedBox(width: 15),
+                  Container(width: 4, height: 22, decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Text(monthName.toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 24, letterSpacing: 1.5)),
+                    child: Text(monthName, style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 20, letterSpacing: 1)),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10)),
-                    child: Text('NET: ${monthNet.toInt()}', style: GoogleFonts.bebasNeue(color: monthNet >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: 16)),
-                  ),
+                  Text('Net: ${monthNet.toInt()}', style: GoogleFonts.bebasNeue(color: monthNet >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: 14)),
                 ],
               ),
             ),
             
-            // Daily Items
             ...sortedDates.map((dateKey) {
               DateTime date = DateTime.parse(dateKey);
               List<Fund> items = dailyGroups[dateKey]!;
               double dailyNet = items.fold(0, (sum, f) => f.type == 'EXPENSE' ? sum - f.amount : sum + f.amount);
 
               return Container(
-                margin: const EdgeInsets.only(bottom: 25),
+                margin: const EdgeInsets.only(bottom: 20),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Calendar Card
                     Container(
-                      width: 65,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      width: 60,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(colors: [Color(0xFF020C3B), Color(0xFF051970)]),
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orange.withOpacity(0.1)),
                       ),
                       child: Column(
                         children: [
-                          Text(DateFormat('MMM').format(date).toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 14)),
-                          Text(DateFormat('dd').format(date), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, height: 1)),
-                          const SizedBox(height: 5),
-                          Text('${dailyNet.toInt()}', style: GoogleFonts.bebasNeue(color: dailyNet >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: 11)),
+                          Text(DateFormat('MMM').format(date).toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 12)),
+                          Text(DateFormat('dd').format(date), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 22, height: 1)),
+                          const SizedBox(height: 4),
+                          Text('${dailyNet.toInt()}', style: GoogleFonts.bebasNeue(color: dailyNet >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: 10)),
                         ],
                       ),
                     ),
@@ -196,11 +206,11 @@ class _FundScreenState extends State<FundScreen> {
                       child: Column(
                         children: items.map((f) => Container(
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: f.type == 'EXPENSE' ? Colors.redAccent.withOpacity(0.1) : Colors.white10),
+                            color: Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(color: Colors.white.withOpacity(0.05)),
                           ),
                           child: Row(
                             children: [
@@ -208,22 +218,21 @@ class _FundScreenState extends State<FundScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(f.name.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                    Text(f.name, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
                                     if (f.note != null && f.note!.isNotEmpty)
-                                      Text(f.note!, style: const TextStyle(color: Colors.white38, fontSize: 9)),
-                                    Text(f.type, style: TextStyle(color: f.type == 'EXPENSE' ? Colors.redAccent : Colors.greenAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+                                      Text(f.note!, style: const TextStyle(color: Colors.white24, fontSize: 9)),
                                   ],
                                 ),
                               ),
                               Text(
                                 '${f.type == 'EXPENSE' ? '-' : ''}${f.amount.toInt()} ৳', 
-                                style: GoogleFonts.bebasNeue(color: f.type == 'EXPENSE' ? Colors.redAccent : Colors.greenAccent, fontSize: 18)
+                                style: GoogleFonts.bebasNeue(color: f.type == 'EXPENSE' ? Colors.redAccent : Colors.greenAccent, fontSize: 16)
                               ),
                               if (isAdmin) ...[
-                                const SizedBox(width: 10),
+                                const SizedBox(width: 8),
                                 GestureDetector(
                                   onTap: () => _confirmDeleteFund(context, provider, f),
-                                  child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                                  child: const Icon(Icons.delete_outline, color: Colors.white10, size: 16),
                                 ),
                               ],
                             ],
@@ -235,8 +244,6 @@ class _FundScreenState extends State<FundScreen> {
                 ),
               );
             }).toList(),
-            
-            const Divider(color: Colors.white10, height: 40),
           ],
         );
       },
@@ -248,16 +255,16 @@ class _FundScreenState extends State<FundScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF020C3B),
-        title: Text('DELETE ENTRY', style: GoogleFonts.bebasNeue(color: Colors.white)),
+        title: Text('Delete Entry', style: GoogleFonts.bebasNeue(color: Colors.white)),
         content: Text('Remove this entry of ${fund.amount.toInt()}?', style: GoogleFonts.poppins(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
               provider.deleteFund(fund.id!);
               Navigator.pop(context);
             },
-            child: const Text('DELETE', style: TextStyle(color: Colors.redAccent)),
+            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),
@@ -278,7 +285,7 @@ class _FundScreenState extends State<FundScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF020C3B),
-          title: Text('ADD TO FUND', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1.2)),
+          title: Text('Add to Fund', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1.2)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -356,7 +363,7 @@ class _FundScreenState extends State<FundScreen> {
                                 backgroundImage: p.photoUrl != '' ? MemoryImage(base64Decode(p.photoUrl)) : null,
                                 child: p.photoUrl == '' ? Text(p.name[0], style: const TextStyle(fontSize: 10)) : null,
                               ),
-                              title: Text(p.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              title: Text(p.name, style: const TextStyle(color: Colors.white, fontSize: 13)),
                               onTap: () => onSelected(name),
                             );
                           },
@@ -405,12 +412,18 @@ class _FundScreenState extends State<FundScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
               onPressed: () async {
+                String? selectedPlayerId;
+                try {
+                  selectedPlayerId = players.firstWhere((p) => p.name == nameController.text).id;
+                } catch (_) {}
+
                 if (nameController.text.isNotEmpty && amountController.text.isNotEmpty) {
                   final fund = Fund(
+                    playerId: selectedPlayerId,
                     name: nameController.text,
                     amount: double.parse(amountController.text),
                     date: selectedDate,

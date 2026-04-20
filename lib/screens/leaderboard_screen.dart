@@ -25,10 +25,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   void _generateMonthList() {
     _monthList = ['Overall'];
+    DateTime start = DateTime(2026, 4, 1);
     DateTime now = DateTime.now();
-    for (int i = 0; i < 12; i++) {
-      DateTime date = DateTime(now.year, now.month - i, 1);
-      _monthList.add(DateFormat('MM-yyyy').format(date));
+    
+    DateTime current = DateTime(now.year, now.month, 1);
+    while (current.isAfter(start) || current.isAtSameMomentAs(start)) {
+      _monthList.add(DateFormat('MM-yyyy').format(current));
+      current = DateTime(current.year, current.month - 1, 1);
     }
   }
 

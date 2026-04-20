@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'dart:typed_data';
+import 'package:pdf/widgets.dart' as pw;
 import '../providers/contribution_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/ball_provider.dart';
@@ -10,6 +12,7 @@ import '../models/contribution.dart';
 import '../models/fine_payment.dart';
 import '../utils/status_dialog.dart';
 import '../utils/export_service.dart';
+import '../utils/csv_export_service.dart';
 
 class ContributionScreen extends StatefulWidget {
   const ContributionScreen({super.key});
@@ -45,10 +48,13 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
 
   void _generateMonthList() {
     _monthList = ['Overall'];
+    DateTime start = DateTime(2026, 4, 1);
     DateTime now = DateTime.now();
-    for (int i = 0; i < 12; i++) {
-      DateTime date = DateTime(now.year, now.month - i, 1);
-      _monthList.add(DateFormat('MM-yyyy').format(date));
+    
+    DateTime current = DateTime(now.year, now.month, 1);
+    while (current.isAfter(start) || current.isAtSameMomentAs(start)) {
+      _monthList.add(DateFormat('MM-yyyy').format(current));
+      current = DateTime(current.year, current.month - 1, 1);
     }
   }
 
@@ -321,15 +327,25 @@ class _ContributionScreenState extends State<ContributionScreen> with SingleTick
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.table_view_outlined, color: Colors.greenAccent),
+            onPressed: () => CsvExportService.exportFinancialsToCsv(provider.contributions, fineProvider.payments),
+          ),
+          IconButton(
             icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.orange),
-            onPressed: () {
+            onPressed: () async {
+               final masterPdf = pw.Document();
                if (_tabController.index == 0) {
                  final summaryData = _getUnifiedSummary(provider, fineProvider);
-                 ExportService.exportFinancialSummaryReport(monthYear: _selectedMonthYear, data: summaryData);
+                 await ExportService.addFinancialSummaryReport(masterPdf, monthYear: _selectedMonthYear, data: summaryData);
                } else {
                  final detailedData = _getUnifiedDetailedList(provider, fineProvider);
-                 ExportService.exportFinancialDetailedReport(monthYear: _selectedMonthYear, contributions: detailedData);
+                 await ExportService.addFinancialDetailedReport(masterPdf, monthYear: _selectedMonthYear, contributions: detailedData);
                }
+               await ExportService.addPaymentInstructionPage(masterPdf);
+               
+               final Uint8List bytes = await masterPdf.save();
+               final String fileName = _tabController.index == 0 ? 'fin_summary.pdf' : 'fin_detailed.pdf';
+               await ExportService.downloadMultiplePdfs([bytes], [fileName]);
             },
           ),
           const SizedBox(width: 10),

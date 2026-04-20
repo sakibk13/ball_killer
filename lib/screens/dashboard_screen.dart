@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/ball_provider.dart';
 import '../providers/inventory_provider.dart';
+import '../providers/fine_provider.dart';
+import '../providers/contribution_provider.dart';
 import 'manage_players_screen.dart';
 import 'player_ball_loss_screen.dart';
 import 'records_screen.dart';
@@ -16,6 +18,7 @@ import 'leaderboard_screen.dart';
 import 'fine_screen.dart';
 import 'fund_screen.dart';
 import 'report_center_screen.dart';
+import 'player_status_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -36,6 +39,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<BallProvider>(context, listen: false).init();
       Provider.of<InventoryProvider>(context, listen: false).fetchInventory();
+      Provider.of<FineProvider>(context, listen: false).fetchPayments();
+      Provider.of<ContributionProvider>(context, listen: false).fetchContributions();
     });
   }
 
@@ -64,11 +69,57 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     final authProvider = Provider.of<AuthProvider>(context);
     final ballProvider = Provider.of<BallProvider>(context);
     final invProvider = Provider.of<InventoryProvider>(context);
+    final fineProv = Provider.of<FineProvider>(context);
+    final contProv = Provider.of<ContributionProvider>(context);
     
     final isAdmin = authProvider.isAdmin;
     final remainingBalls = invProvider.getCumulativeRemaining('Overall');
     final user = authProvider.currentUser;
     final photoBytes = _safeDecode(user?.photoUrl);
+
+    // Personalized Match for Non-Admins
+    Map<String, dynamic>? personalStats;
+    if (user != null) {
+      try {
+        final players = ballProvider.players;
+        final matchedPlayer = players.firstWhere(
+          (p) => p.name.toLowerCase() == user.name.toLowerCase() && p.phone == user.phone
+        );
+        
+        final double finePaid = fineProv.getTotalPaidForPlayer(matchedPlayer.id!, 'Overall');
+        final double allContribs = contProv.contributions
+            .where((c) => c.playerId == matchedPlayer.id!)
+            .fold(0.0, (sum, c) => sum + c.taka);
+        
+        final double totalFineOwed = matchedPlayer.totalLost * 50.0;
+        final double totalMoneyGiven = finePaid + allContribs;
+
+        double due = 0; double credit = 0;
+        if (totalMoneyGiven >= totalFineOwed) {
+          due = 0; credit = totalMoneyGiven - totalFineOwed;
+        } else {
+          due = totalFineOwed - totalMoneyGiven; credit = 0;
+        }
+
+        // Find last payment date
+        DateTime? lastDate;
+        final combinedHistory = [
+          ...fineProv.payments.where((p) => p.playerId == matchedPlayer.id!),
+          ...contProv.contributions.where((c) => c.playerId == matchedPlayer.id!)
+        ];
+        if (combinedHistory.isNotEmpty) {
+          combinedHistory.sort((a, b) => (b as dynamic).date.compareTo((a as dynamic).date));
+          lastDate = (combinedHistory.first as dynamic).date;
+        }
+
+        personalStats = {
+          'lost': matchedPlayer.totalLost,
+          'due': due,
+          'credit': credit,
+          'lastPay': lastDate != null ? DateFormat('dd MMM').format(lastDate) : 'No Data',
+        };
+      } catch (_) {}
+    }
 
     return Scaffold(
       body: Container(
@@ -85,6 +136,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               await authProvider.refreshUser();
               await ballProvider.refresh();
               await invProvider.fetchInventory(force: true);
+              await fineProv.fetchPayments();
+              await contProv.fetchContributions();
             },
             color: Colors.orange,
             child: FadeTransition(
@@ -97,7 +150,14 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   children: [
                     const SizedBox(height: 20),
                     _buildHeader(user, photoBytes, authProvider),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 25),
+                    
+                    // NEW: Personalized Card for Players
+                    if (personalStats != null) ...[
+                      _buildPersonalStatusCard(personalStats),
+                      const SizedBox(height: 25),
+                    ],
+
                     _buildStatsGrid(remainingBalls, ballProvider, invProvider, isAdmin),
                     const SizedBox(height: 35),
                     Row(
@@ -127,6 +187,50 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
+  Widget _buildPersonalStatusCard(Map<String, dynamic> stats) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white12),
+        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 5))],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.stars_rounded, color: Colors.orange, size: 24),
+              const SizedBox(width: 12),
+              Text('MY CLUB STATUS', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 18, letterSpacing: 1.2)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildMiniStat('TOTAL LOST', '${stats['lost']} B', Colors.white70),
+              _buildMiniStat('FINE DUE', '${stats['due'].toInt()} ৳', stats['due'] > 0 ? Colors.redAccent : Colors.greenAccent),
+              _buildMiniStat('CLUB CREDIT', '${stats['credit'].toInt()} ৳', stats['credit'] > 0 ? Colors.greenAccent : Colors.white24),
+              _buildMiniStat('LAST PAY', '${stats['lastPay']}', Colors.blueAccent),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniStat(String label, String val, Color color) {
+    return Column(
+      children: [
+        Text(val, style: GoogleFonts.bebasNeue(color: color, fontSize: 18)),
+        const SizedBox(height: 4),
+        Text(label, style: GoogleFonts.bebasNeue(color: Colors.white24, fontSize: 9, letterSpacing: 0.5)),
+      ],
+    );
+  }
+
   Widget _buildHeader(user, photoBytes, authProvider) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -134,8 +238,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('WELCOME BACK,', style: GoogleFonts.poppins(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-            Text(user?.name.toUpperCase() ?? 'PLAYER', style: GoogleFonts.bebasNeue(fontSize: 32, color: Colors.white, letterSpacing: 1.2)),
+            Text('Welcome back,', style: GoogleFonts.poppins(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            Text(user?.name ?? 'Player', style: GoogleFonts.bebasNeue(fontSize: 32, color: Colors.white, letterSpacing: 1.2)),
           ],
         ),
         Row(
@@ -166,9 +270,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
   Widget _buildStatsGrid(int stock, BallProvider ball, InventoryProvider inv, bool isAdmin) {
-    int lostToday = ball.todayRecords.fold(0, (sum, r) => sum + r.lostCount);
+    int lostTodayRaw = ball.todayRecords.fold(0, (sum, r) => sum + r.lostCount);
+    int lostToday = lostTodayRaw < 0 ? 0 : lostTodayRaw;
     
-    // Top player fine calculation for current month
     final currentMonth = DateFormat('MM-yyyy').format(DateTime.now());
     final playersWithTotals = ball.getPlayersWithTotals(monthYear: currentMonth);
     final sortedPlayers = List<Map<String, dynamic>>.from(playersWithTotals)
@@ -181,86 +285,96 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       children: [
         Row(
           children: [
-            Expanded(child: _buildModernStatCard('STOCK COUNT', '$stock', Colors.greenAccent, Icons.inventory_2_outlined)),
+            Expanded(child: _buildCompactStatCard('STOCK', '$stock', Colors.greenAccent)),
             const SizedBox(width: 15),
-            Expanded(child: _buildModernStatCard('LOST TODAY', '$lostToday', Colors.redAccent, Icons.running_with_errors_outlined)),
+            Expanded(child: _buildCompactStatCard('LOST TODAY', '$lostToday', Colors.redAccent)),
           ],
         ),
         const SizedBox(height: 15),
         InkWell(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FineScreen())),
           borderRadius: BorderRadius.circular(28),
-          child: _buildModernStatCard(
-            'MONTHLY TOP FINE', 
-            '$fine', 
-            Colors.orangeAccent, 
-            Icons.monetization_on_outlined, 
-            fullWidth: true,
-            subtitle: 'Top Loser: ${sortedPlayers.isNotEmpty ? sortedPlayers.first['name'] : "None"}'
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFFE65100), Color(0xFFFF8F00)]),
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                  child: const Icon(Icons.monetization_on, color: Colors.white, size: 30),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('MONTHLY TOP FINE', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 18, letterSpacing: 1)),
+                      Text('Top: ${sortedPlayers.isNotEmpty ? sortedPlayers.first['name'] : "None"}', style: GoogleFonts.poppins(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                Text('$fine', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 32)),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildModernStatCard(String label, String val, Color color, IconData icon, {bool fullWidth = false, String? subtitle}) {
+  Widget _buildCompactStatCard(String label, String val, Color color) {
     return Container(
-      width: fullWidth ? double.infinity : null,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: Colors.white10),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white.withOpacity(0.08), Colors.white.withOpacity(0.02)],
-        ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              if (subtitle != null)
-                Text(subtitle, style: GoogleFonts.poppins(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w500)),
-            ],
-          ),
-          const SizedBox(height: 15),
-          Text(val, style: GoogleFonts.bebasNeue(fontSize: 32, color: Colors.white, letterSpacing: 1)),
-          Text(label, style: GoogleFonts.poppins(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          Text(val, style: GoogleFonts.bebasNeue(fontSize: 26, color: color)),
+          Text(label, style: GoogleFonts.bebasNeue(color: Colors.white38, fontSize: 10, letterSpacing: 1)),
         ],
       ),
     );
   }
 
   Widget _buildActionGrid(BuildContext context, bool isAdmin) {
+    List<Widget> cards = [];
+    
+    if (isAdmin) {
+      cards.add(_buildActionCard(context, 'RECORD LOSS', 'Log New Entry', Icons.add_moderator_outlined, const Color(0xFFFF5252), const PlayerBallLossScreen()));
+    }
+    
+    cards.addAll([
+      _buildActionCard(context, 'TRACK OVERVIEW', 'History', Icons.auto_graph_rounded, const Color(0xFF42A5F5), const RecordsScreen()),
+      _buildActionCard(context, 'LEADERBOARD', 'Ranking', Icons.emoji_events_outlined, const Color(0xFFFFA726), const LeaderboardScreen()),
+      _buildActionCard(context, 'STOCK LOG', 'Inventory', Icons.analytics_outlined, const Color(0xFF66BB6A), const InventoryScreen()),
+      _buildActionCard(context, 'FINANCIALS', 'Club Income', Icons.account_balance_wallet_outlined, const Color(0xFFAB47BC), const ContributionScreen()),
+      _buildActionCard(context, 'CLUB FUND', 'Reserve', Icons.savings_outlined, const Color(0xFF26A69A), const FundScreen()),
+      _buildActionCard(context, 'PLAYER STATUS', 'Overview', Icons.assignment_ind_outlined, const Color(0xFF00ACC1), PlayerStatusScreen()),
+      _buildActionCard(context, 'PLAYER FINES', 'Account Status', Icons.warning_amber_rounded, const Color(0xFFEF5350), const FineScreen()),
+      _buildActionCard(context, 'REPORT CENTER', 'Monthly PDF', Icons.folder_shared_outlined, const Color(0xFF536DFE), const ReportCenterScreen()),
+    ]);
+
+    if (isAdmin) {
+      cards.add(_buildActionCard(context, 'ADMIN PANEL', 'Management', Icons.admin_panel_settings_outlined, const Color(0xFF78909C), const ManagePlayersScreen()));
+    }
+
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
       mainAxisSpacing: 15,
       crossAxisSpacing: 15,
-      childAspectRatio: 1.1,
-      children: [
-        _buildActionCard(context, 'TRACK OVERVIEW', 'Professional history', Icons.auto_graph_rounded, const Color(0xFF42A5F5), const RecordsScreen()),
-        _buildActionCard(context, 'LEADERBOARD', 'Top ball killers', Icons.emoji_events_outlined, const Color(0xFFFFA726), const LeaderboardScreen()),
-        _buildActionCard(context, 'STOCK LOG', 'Manage inventory', Icons.analytics_outlined, const Color(0xFF66BB6A), const InventoryScreen()),
-        _buildActionCard(context, 'FINANCIALS', 'Club collections', Icons.account_balance_wallet_outlined, const Color(0xFFAB47BC), const ContributionScreen()),
-        _buildActionCard(context, 'CLUB FUND', 'Total cash reserve', Icons.savings_outlined, const Color(0xFF26A69A), const FundScreen()),
-        _buildActionCard(context, 'PLAYER FINES', 'Due & Payments', Icons.warning_amber_rounded, const Color(0xFFEF5350), const FineScreen()),
-        _buildActionCard(context, 'REPORT CENTER', 'Bulk PDF Export', Icons.folder_shared_outlined, const Color(0xFF536DFE), const ReportCenterScreen()),
-        if (isAdmin) ...[
-          _buildActionCard(context, 'RECORD LOSS', 'Log, Manage & Track', Icons.add_moderator_outlined, const Color(0xFFFF5252), const PlayerBallLossScreen()),
-          _buildActionCard(context, 'ADMIN PANEL', 'System management', Icons.admin_panel_settings_outlined, const Color(0xFF78909C), const ManagePlayersScreen()),
-        ],
-      ],
+      childAspectRatio: 1.25,
+      children: cards,
     );
   }
 
@@ -275,33 +389,24 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             offset: Offset(0, 20 * (1 - value)),
             child: InkWell(
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => screen)),
-              borderRadius: BorderRadius.circular(30),
+              borderRadius: BorderRadius.circular(25),
               child: Container(
-                padding: const EdgeInsets.all(15),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(30),
+                  borderRadius: BorderRadius.circular(25),
                   border: Border.all(color: Colors.white.withOpacity(0.08)),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 8))],
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [color.withOpacity(0.25), color.withOpacity(0.05)],
-                        ),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: color.withOpacity(0.2), width: 1),
-                      ),
-                      child: Icon(icon, color: color, size: 30),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+                      child: Icon(icon, color: color, size: 24),
                     ),
-                    const SizedBox(height: 12),
-                    Text(title, style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 18, letterSpacing: 1.2)),
+                    const SizedBox(height: 10),
+                    Text(title, textAlign: TextAlign.center, style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 15, letterSpacing: 0.8)),
                     Text(subtitle, style: GoogleFonts.poppins(color: Colors.white24, fontSize: 8, fontWeight: FontWeight.w500)),
                   ],
                 ),

@@ -28,15 +28,18 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
   void initState() {
     super.initState();
     _generateMonthList();
-    _selectedMonth = _monthList.first; // Default to Overall or Current
+    _selectedMonth = _monthList.first;
   }
 
   void _generateMonthList() {
     _monthList = ['Overall'];
+    DateTime start = DateTime(2026, 4, 1);
     DateTime now = DateTime.now();
-    for (int i = 0; i < 12; i++) {
-      DateTime date = DateTime(now.year, now.month - i, 1);
-      _monthList.add(DateFormat('MM-yyyy').format(date));
+    
+    DateTime current = DateTime(now.year, now.month, 1);
+    while (current.isAfter(start) || current.isAtSameMomentAs(start)) {
+      _monthList.add(DateFormat('MM-yyyy').format(current));
+      current = DateTime(current.year, current.month - 1, 1);
     }
   }
 
@@ -54,28 +57,18 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
       final String month = _selectedMonth!;
       final masterPdf = pw.Document();
 
-      // PAGE 1: LEADERBOARD
-      final players = ballProv.getPlayersWithTotals(monthYear: month);
-      await ExportService.addLeaderboard(masterPdf, monthYear: month, players: players);
-
-      // PAGE 2: FINE REPORT
+      // PAGE 1: FINE REPORT
       final playersWithTotals = ballProv.getPlayersWithTotals(monthYear: month);
       final enriched = playersWithTotals.map((p) {
-        final double finePaid = fineProv.getTotalPaidForPlayer(p['id'], month);
-        final double contribPaid = contProv.contributions
-            .where((c) => c.playerId == p['id'] && (month == 'Overall' || c.monthYear == month) && c.isFinePayment)
-            .fold(0.0, (sum, c) => sum + c.taka);
-        
+        final double directFinePayments = fineProv.getTotalPaidForPlayer(p['id'], month);
         final double allContribs = contProv.contributions
             .where((c) => c.playerId == p['id'] && (month == 'Overall' || c.monthYear == month))
             .fold(0.0, (sum, c) => sum + c.taka);
 
         final double totalFineOwed = (p['total'] as int) * 50.0;
-        final double totalFineGiven = finePaid + contribPaid;
-        final double totalMoneyGiven = finePaid + allContribs;
+        final double totalMoneyGiven = directFinePayments + allContribs;
 
-        double due = 0;
-        double credit = 0;
+        double due = 0; double credit = 0;
         if (totalMoneyGiven >= totalFineOwed) {
           due = 0; credit = totalMoneyGiven - totalFineOwed;
         } else {
@@ -92,11 +85,15 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
       }).toList();
       await ExportService.addFineReport(masterPdf, monthYear: month, sortedPlayers: enriched);
 
-      // PAGE 3: CLUB FUND (FULL HISTORY)
-      await ExportService.addFundReport(masterPdf, funds: fundProv.funds, grandTotal: fundProv.grandTotal);
+      // PAGE 2: CLUB FUND (MONTH SECTION WISE WITH PHOTOS)
+      await ExportService.addFundReport(masterPdf, funds: fundProv.funds, grandTotal: fundProv.grandTotal, players: ballProv.players);
 
-      // PAGE 4: PAYMENT NOTICE
+      // PAGE 3: PAYMENT NOTICE
       await ExportService.addPaymentInstructionPage(masterPdf);
+
+      // PAGE 4: LEADERBOARD
+      final leaderboardPlayers = ballProv.getPlayersWithTotals(monthYear: month);
+      await ExportService.addLeaderboard(masterPdf, monthYear: month, players: leaderboardPlayers);
 
       final Uint8List mergedBytes = await masterPdf.save();
       final String filename = 'Club_Report_${month.replaceAll('-', '_')}.pdf';
@@ -105,12 +102,12 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Professional Monthly Bundle Generated!"))
+          const SnackBar(content: Text("Bundle Generated Successfully!"))
         );
       }
     } catch (e) {
       if (mounted) {
-        StatusDialog.show(context, title: "ERROR", message: "Failed to generate bundle: $e", isSuccess: false);
+        StatusDialog.show(context, title: "ERROR", message: "Failed: $e", isSuccess: false);
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -134,8 +131,8 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildInfoCard(),
-                const SizedBox(height: 40),
-                Text('SELECT MONTH TO GENERATE BUNDLE', style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 18, letterSpacing: 1)),
+                const SizedBox(height: 30),
+                Text('SELECT MONTH', style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 18, letterSpacing: 1)),
                 const SizedBox(height: 15),
                 Expanded(
                   child: GridView.builder(
@@ -146,7 +143,7 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
                     itemBuilder: (ctx, i) {
                       final month = _monthList[i];
                       final isSelected = _selectedMonth == month;
-                      final label = month == 'Overall' ? 'OVERALL' : DateFormat('MMMM yyyy').format(DateFormat('MM-yyyy').parse(month)).toUpperCase();
+                      final label = month == 'Overall' ? 'OVERALL' : DateFormat('MMMM yyyy').format(DateFormat('MM-yyyy').parse(month));
 
                       return InkWell(
                         onTap: () => setState(() => _selectedMonth = month),
@@ -158,8 +155,7 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
                             boxShadow: isSelected ? [BoxShadow(color: Colors.orange.withOpacity(0.1), blurRadius: 10)] : null,
                           ),
                           alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(label, textAlign: TextAlign.center, style: GoogleFonts.bebasNeue(color: isSelected ? Colors.orange : Colors.white60, fontSize: 13, letterSpacing: 0.5)),
+                          child: Text(label, textAlign: TextAlign.center, style: GoogleFonts.bebasNeue(color: isSelected ? Colors.orange : Colors.white38, fontSize: 13)),
                         ),
                       );
                     },
@@ -191,31 +187,29 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.auto_awesome_motion_rounded, color: Colors.orange, size: 30),
+              const Icon(Icons.auto_awesome_motion_rounded, color: Colors.orange, size: 28),
               const SizedBox(width: 15),
-              Expanded(
-                child: Text('4-PAGE MONTHLY BUNDLE', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 20)),
-              ),
+              Text('PROFESSIONAL 4-PAGE BUNDLE', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 18)),
             ],
           ),
           const SizedBox(height: 15),
-          _buildInfoRow(Icons.check_circle_outline, 'Page 1: Official Leaderboard'),
-          _buildInfoRow(Icons.check_circle_outline, 'Page 2: Fine & Credit Report'),
-          _buildInfoRow(Icons.check_circle_outline, 'Page 3: Total Club Fund Reserve'),
-          _buildInfoRow(Icons.check_circle_outline, 'Page 4: Payment Instruction Notice'),
+          _buildInfoRow('1. Fine & Account Status'),
+          _buildInfoRow('2. Monthly Fund Breakdown'),
+          _buildInfoRow('3. Official Payment Notice'),
+          _buildInfoRow('4. Player Leaderboard'),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String text) {
+  Widget _buildInfoRow(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
-          Icon(icon, color: Colors.greenAccent, size: 14),
+          const Icon(Icons.check_circle, color: Colors.greenAccent, size: 12),
           const SizedBox(width: 10),
-          Text(text, style: GoogleFonts.poppins(color: Colors.white38, fontSize: 11)),
+          Text(text, style: GoogleFonts.poppins(color: Colors.white24, fontSize: 11)),
         ],
       ),
     );

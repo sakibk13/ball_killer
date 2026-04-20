@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.ball_killer"
+    namespace = "com.minishakib.ball_killer"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -19,7 +19,12 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
+    }
+
+    // Disable incremental to fix cross-drive roots (E: vs C:)
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+        incremental = false
     }
 
     defaultConfig {
