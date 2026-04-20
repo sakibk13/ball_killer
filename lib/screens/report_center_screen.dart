@@ -20,37 +20,28 @@ class ReportCenterScreen extends StatefulWidget {
 }
 
 class _ReportCenterScreenState extends State<ReportCenterScreen> {
-  final Set<String> _selectedReports = {};
   late List<String> _monthList;
   bool _isProcessing = false;
+  String? _selectedMonth;
 
   @override
   void initState() {
     super.initState();
     _generateMonthList();
+    _selectedMonth = _monthList.first; // Default to Overall or Current
   }
 
   void _generateMonthList() {
     _monthList = ['Overall'];
     DateTime now = DateTime.now();
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 12; i++) {
       DateTime date = DateTime(now.year, now.month - i, 1);
       _monthList.add(DateFormat('MM-yyyy').format(date));
     }
   }
 
-  void _toggleSelection(String id) {
-    setState(() {
-      if (_selectedReports.contains(id)) {
-        _selectedReports.remove(id);
-      } else {
-        _selectedReports.add(id);
-      }
-    });
-  }
-
-  Future<void> _processReports() async {
-    if (_selectedReports.isEmpty) return;
+  Future<void> _generateMonthlyBundle() async {
+    if (_selectedMonth == null) return;
 
     setState(() => _isProcessing = true);
 
@@ -60,60 +51,66 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
       final contProv = Provider.of<ContributionProvider>(context, listen: false);
       final fundProv = Provider.of<FundProvider>(context, listen: false);
 
-      // Create a SINGLE master PDF document
+      final String month = _selectedMonth!;
       final masterPdf = pw.Document();
 
-      for (String id in _selectedReports) {
-        final parts = id.split('|');
-        final type = parts[0];
-        final month = parts[1];
+      // PAGE 1: LEADERBOARD
+      final players = ballProv.getPlayersWithTotals(monthYear: month);
+      await ExportService.addLeaderboard(masterPdf, monthYear: month, players: players);
 
-        if (type == 'LEADERBOARD') {
-          final players = ballProv.getPlayersWithTotals(monthYear: month);
-          await ExportService.addLeaderboard(masterPdf, monthYear: month, players: players);
-        } 
-        else if (type == 'FINE') {
-          final playersWithTotals = ballProv.getPlayersWithTotals(monthYear: month);
-          final enriched = playersWithTotals.map((p) {
-            final double finePaid = fineProv.getTotalPaidForPlayer(p['id'], month);
-            final double contribPaid = contProv.contributions
-                .where((c) => c.playerId == p['id'] && (month == 'Overall' || c.monthYear == month) && c.isFinePayment)
-                .fold(0.0, (sum, c) => sum + c.taka);
-            final double totalFineGiven = finePaid + contribPaid;
-            return {...p, 'totalFine': (p['total'] as int) * 50.0, 'paid': totalFineGiven, 'due': ((p['total'] as int) * 50.0 - totalFineGiven).clamp(0, double.infinity)};
-          }).toList();
-          await ExportService.addFineReport(masterPdf, monthYear: month, sortedPlayers: enriched);
-        }
-        else if (type == 'FIN_SUM') {
-          final data = contProv.getGroupedContributions();
-          final filtered = month == 'Overall' ? data : (data.containsKey(month) ? {month: data[month]!} : <String, Map<String, double>>{});
-          await ExportService.addFinancialSummaryReport(masterPdf, monthYear: month, data: filtered);
-        }
-        else if (type == 'FIN_DET') {
-          final list = month == 'Overall' ? contProv.contributions : contProv.contributions.where((c) => c.monthYear == month).toList();
-          final payments = month == 'Overall' ? fineProv.payments : fineProv.payments.where((p) => p.monthYear == month).toList();
-          final combined = [...list, ...payments]..sort((a, b) => (b as dynamic).date.compareTo((a as dynamic).date));
-          await ExportService.addFinancialDetailedReport(masterPdf, monthYear: month, contributions: combined);
-        }
-        else if (type == 'FUND') {
-          await ExportService.addFundReport(masterPdf, funds: fundProv.funds, grandTotal: fundProv.grandTotal);
-        }
-      }
+      // PAGE 2: FINE REPORT
+      final playersWithTotals = ballProv.getPlayersWithTotals(monthYear: month);
+      final enriched = playersWithTotals.map((p) {
+        final double finePaid = fineProv.getTotalPaidForPlayer(p['id'], month);
+        final double contribPaid = contProv.contributions
+            .where((c) => c.playerId == p['id'] && (month == 'Overall' || c.monthYear == month) && c.isFinePayment)
+            .fold(0.0, (sum, c) => sum + c.taka);
+        
+        final double allContribs = contProv.contributions
+            .where((c) => c.playerId == p['id'] && (month == 'Overall' || c.monthYear == month))
+            .fold(0.0, (sum, c) => sum + c.taka);
 
-      // Final bytes of the single merged PDF
+        final double totalFineOwed = (p['total'] as int) * 50.0;
+        final double totalFineGiven = finePaid + contribPaid;
+        final double totalMoneyGiven = finePaid + allContribs;
+
+        double due = 0;
+        double credit = 0;
+        if (totalMoneyGiven >= totalFineOwed) {
+          due = 0; credit = totalMoneyGiven - totalFineOwed;
+        } else {
+          due = totalFineOwed - totalMoneyGiven; credit = 0;
+        }
+
+        return {
+          ...p,
+          'totalFine': totalFineOwed,
+          'paid': totalMoneyGiven,
+          'due': due,
+          'surplus': credit,
+        };
+      }).toList();
+      await ExportService.addFineReport(masterPdf, monthYear: month, sortedPlayers: enriched);
+
+      // PAGE 3: CLUB FUND (FULL HISTORY)
+      await ExportService.addFundReport(masterPdf, funds: fundProv.funds, grandTotal: fundProv.grandTotal);
+
+      // PAGE 4: PAYMENT NOTICE
+      await ExportService.addPaymentInstructionPage(masterPdf);
+
       final Uint8List mergedBytes = await masterPdf.save();
+      final String filename = 'Club_Report_${month.replaceAll('-', '_')}.pdf';
       
-      // Open standard system dialog (Save / Share)
-      await ExportService.downloadMultiplePdfs([mergedBytes], ['Club_Merged_Report.pdf']);
+      await ExportService.downloadMultiplePdfs([mergedBytes], [filename]);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Select 'Save to device' to download the merged PDF"))
+          const SnackBar(content: Text("Professional Monthly Bundle Generated!"))
         );
       }
     } catch (e) {
       if (mounted) {
-        StatusDialog.show(context, title: "ERROR", message: "Failed to merge reports: $e", isSuccess: false);
+        StatusDialog.show(context, title: "ERROR", message: "Failed to generate bundle: $e", isSuccess: false);
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -131,15 +128,45 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
       ),
       body: Stack(
         children: [
-          ListView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-            children: [
-              _buildSection('🏆 LEADERBOARD REPORTS', 'LEADERBOARD'),
-              _buildSection('💰 FINE NOTICE REPORTS', 'FINE'),
-              _buildSection('📊 FINANCIAL SUMMARIES', 'FIN_SUM'),
-              _buildSection('📝 DETAILED FINANCIALS', 'FIN_DET'),
-              _buildFundSection(),
-            ],
+          Padding(
+            padding: const EdgeInsets.all(25),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildInfoCard(),
+                const SizedBox(height: 40),
+                Text('SELECT MONTH TO GENERATE BUNDLE', style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 18, letterSpacing: 1)),
+                const SizedBox(height: 15),
+                Expanded(
+                  child: GridView.builder(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 2.8,
+                    ),
+                    itemCount: _monthList.length,
+                    itemBuilder: (ctx, i) {
+                      final month = _monthList[i];
+                      final isSelected = _selectedMonth == month;
+                      final label = month == 'Overall' ? 'OVERALL' : DateFormat('MMMM yyyy').format(DateFormat('MM-yyyy').parse(month)).toUpperCase();
+
+                      return InkWell(
+                        onTap: () => setState(() => _selectedMonth = month),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSelected ? Colors.orange.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(color: isSelected ? Colors.orange : Colors.white10),
+                            boxShadow: isSelected ? [BoxShadow(color: Colors.orange.withOpacity(0.1), blurRadius: 10)] : null,
+                          ),
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(label, textAlign: TextAlign.center, style: GoogleFonts.bebasNeue(color: isSelected ? Colors.orange : Colors.white60, fontSize: 13, letterSpacing: 0.5)),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
           if (_isProcessing)
             Container(
@@ -148,107 +175,62 @@ class _ReportCenterScreenState extends State<ReportCenterScreen> {
             ),
         ],
       ),
-      bottomSheet: _selectedReports.isEmpty ? null : _buildBottomActions(),
+      bottomNavigationBar: _buildBottomAction(),
     );
   }
 
-  Widget _buildBottomActions() {
+  Widget _buildInfoCard() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(
-        color: Color(0xFF020C3B),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      decoration: BoxDecoration(
+        color: const Color(0xFF020C3B),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white10),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: _processReports,
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: Text('MERGE & EXPORT (${_selectedReports.length})', style: GoogleFonts.bebasNeue()),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, padding: const EdgeInsets.symmetric(vertical: 15)),
-            ),
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_motion_rounded, color: Colors.orange, size: 30),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Text('4-PAGE MONTHLY BUNDLE', style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 20)),
+              ),
+            ],
           ),
+          const SizedBox(height: 15),
+          _buildInfoRow(Icons.check_circle_outline, 'Page 1: Official Leaderboard'),
+          _buildInfoRow(Icons.check_circle_outline, 'Page 2: Fine & Credit Report'),
+          _buildInfoRow(Icons.check_circle_outline, 'Page 3: Total Club Fund Reserve'),
+          _buildInfoRow(Icons.check_circle_outline, 'Page 4: Payment Instruction Notice'),
         ],
       ),
     );
   }
 
-  Widget _buildSection(String title, String typePrefix) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Text(title, style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 18, letterSpacing: 1)),
-        ),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 3,
-          ),
-          itemCount: _monthList.length,
-          itemBuilder: (ctx, i) {
-            final month = _monthList[i];
-            final id = '$typePrefix|$month';
-            final isSelected = _selectedReports.contains(id);
-            final label = month == 'Overall' ? 'OVERALL' : DateFormat('MMM yy').format(DateFormat('MM-yyyy').parse(month)).toUpperCase();
-
-            return InkWell(
-              onTap: () => _toggleSelection(id),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.orange.withOpacity(0.2) : Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isSelected ? Colors.orange : Colors.white10),
-                ),
-                child: Row(
-                  children: [
-                    Checkbox(
-                      value: isSelected, onChanged: (_) => _toggleSelection(id), 
-                      activeColor: Colors.orange, side: const BorderSide(color: Colors.white24),
-                    ),
-                    Expanded(child: Text(label, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold))),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 20),
-      ],
+  Widget _buildInfoRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.greenAccent, size: 14),
+          const SizedBox(width: 10),
+          Text(text, style: GoogleFonts.poppins(color: Colors.white38, fontSize: 11)),
+        ],
+      ),
     );
   }
 
-  Widget _buildFundSection() {
-    final id = 'FUND|Overall';
-    final isSelected = _selectedReports.contains(id);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Text('🏦 CLUB FUND RESERVE', style: GoogleFonts.bebasNeue(color: Colors.orange, fontSize: 18, letterSpacing: 1)),
-        ),
-        InkWell(
-          onTap: () => _toggleSelection(id),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 15),
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.orange.withOpacity(0.2) : Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isSelected ? Colors.orange : Colors.white10),
-            ),
-            child: Row(
-              children: [
-                Checkbox(value: isSelected, onChanged: (_) => _toggleSelection(id), activeColor: Colors.orange),
-                Text('OFFICIAL FUND REPORT (FULL HISTORY)', style: GoogleFonts.poppins(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ),
-      ],
+  Widget _buildBottomAction() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
+      color: const Color(0xFF020C3B),
+      child: ElevatedButton.icon(
+        onPressed: _generateMonthlyBundle,
+        icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.white),
+        label: Text('GENERATE & SHARE BUNDLE', style: GoogleFonts.bebasNeue(fontSize: 18, color: Colors.white)),
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+      ),
     );
   }
 }

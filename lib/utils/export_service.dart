@@ -15,6 +15,115 @@ import '../models/fund.dart';
 
 class ExportService {
   // --- MASTER MERGE HELPER ---
+
+  // --- PAYMENT INSTRUCTION PAGE (Professional Final Page) ---
+  static Future<void> addPaymentInstructionPage(pw.Document pdf) async {
+    pw.MemoryImage? bkashImg;
+    pw.MemoryImage? bracImg;
+    try {
+      final ByteData bData = await rootBundle.load('assets/bkash.jpg');
+      bkashImg = pw.MemoryImage(bData.buffer.asUint8List());
+      final ByteData brData = await rootBundle.load('assets/brack_bank.jpg');
+      bracImg = pw.MemoryImage(brData.buffer.asUint8List());
+    } catch (e) {}
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(40),
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.SizedBox(height: 20),
+              pw.Text('OFFICIAL PAYMENT NOTICE', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+              pw.SizedBox(height: 10),
+              pw.Divider(thickness: 2, color: PdfColors.orange800),
+              pw.SizedBox(height: 30),
+              pw.Text(
+                'Dear Members,',
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 15),
+              pw.Text(
+                'To ensure the smooth operation of the Ball Killer Club and maintain our inventory, we kindly request all members to clear their outstanding fines and contributions at their earliest convenience. Your cooperation helps us maintain the quality of our play and equipment.',
+                textAlign: pw.TextAlign.center,
+                style: const pw.TextStyle(fontSize: 11, lineSpacing: 1.5),
+              ),
+              pw.SizedBox(height: 40),
+              
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                children: [
+                  // bKash Section
+                  pw.Column(
+                    children: [
+                      if (bkashImg != null) pw.Container(height: 50, width: 100, child: pw.Image(bkashImg)),
+                      pw.SizedBox(height: 10),
+                      pw.Text('bKash (Personal)', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                      pw.Text('01832465446', style: pw.TextStyle(fontSize: 12, color: PdfColors.pink700, fontWeight: pw.FontWeight.bold)),
+                    ],
+                  ),
+                  // BRAC Section
+                  pw.Column(
+                    children: [
+                      if (bracImg != null) pw.Container(height: 50, width: 100, child: pw.Image(bracImg)),
+                      pw.SizedBox(height: 10),
+                      pw.Text('BRAC Bank Transfer', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+              
+              pw.SizedBox(height: 30),
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.all(15),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey100,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+                  border: pw.Border.all(color: PdfColors.grey300),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('BANK ACCOUNT DETAILS:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, color: PdfColors.blue900)),
+                    pw.SizedBox(height: 8),
+                    _buildBankRow('Account Name', 'SAKIB KHAN'),
+                    _buildBankRow('Account Number', '1062020640001'),
+                    _buildBankRow('Bank Name', 'BRAC Bank PLC'),
+                    _buildBankRow('Branch', 'GULSHAN BRANCH'),
+                    _buildBankRow('Routing No.', '060261726'),
+                    _buildBankRow('SWIFT Code', 'BRAKBDDH'),
+                  ],
+                ),
+              ),
+              
+              pw.Spacer(),
+              pw.Text('Thank you for being a valued part of Ball Killer Club.', style: pw.TextStyle(fontStyle: pw.FontStyle.italic, fontSize: 9, color: PdfColors.grey600)),
+              pw.SizedBox(height: 5),
+              pw.Text('by Mini Cricket', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.orange800)),
+              pw.SizedBox(height: 20),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  static pw.Widget _buildBankRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Row(
+        children: [
+          pw.SizedBox(width: 100, child: pw.Text('$label:', style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700))),
+          pw.Text(value, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  // --- FUND REPORT ---
   static Future<void> addFundReport(pw.Document pdf, {required List<Fund> funds, required double grandTotal}) async {
     pw.MemoryImage? logoImage;
     try {
@@ -66,6 +175,7 @@ class ExportService {
   static Future<void> exportFundReport({required List<Fund> funds, required double grandTotal}) async {
     final pdf = pw.Document();
     await addFundReport(pdf, funds: funds, grandTotal: grandTotal);
+    await addPaymentInstructionPage(pdf);
     await _saveAndDownload(await pdf.save(), 'club_fund_report.pdf');
   }
 
@@ -128,6 +238,7 @@ class ExportService {
   static Future<void> exportFinancialSummaryReport({required String monthYear, required Map<String, Map<String, double>> data}) async {
     final pdf = pw.Document();
     await addFinancialSummaryReport(pdf, monthYear: monthYear, data: data);
+    await addPaymentInstructionPage(pdf);
     await _saveAndDownload(await pdf.save(), 'financial_summary_${monthYear.replaceAll('-', '_')}.pdf');
   }
 
@@ -191,6 +302,7 @@ class ExportService {
   static Future<void> exportFinancialDetailedReport({required String monthYear, required List<dynamic> contributions}) async {
     final pdf = pw.Document();
     await addFinancialDetailedReport(pdf, monthYear: monthYear, contributions: contributions);
+    await addPaymentInstructionPage(pdf);
     await _saveAndDownload(await pdf.save(), 'financial_detailed_${monthYear.replaceAll('-', '_')}.pdf');
   }
 
@@ -263,6 +375,7 @@ class ExportService {
   static Future<void> exportLeaderboard({required String monthYear, required List<Map<String, dynamic>> players}) async {
     final pdf = pw.Document();
     await addLeaderboard(pdf, monthYear: monthYear, players: players);
+    await addPaymentInstructionPage(pdf);
     await _saveAndDownload(await pdf.save(), 'leaderboard_${monthYear.replaceAll('-', '_')}.pdf');
   }
 
@@ -299,18 +412,11 @@ class ExportService {
                 4: const pw.FlexColumnWidth(1.2), 
                 5: const pw.FlexColumnWidth(1.2), 
                 6: const pw.FlexColumnWidth(1.2),
-                7: const pw.FlexColumnWidth(1.2), // Added Credit column
+                7: const pw.FlexColumnWidth(1.2),
               },
               children: [
                 pw.TableRow(decoration: const pw.BoxDecoration(color: PdfColors.blue900), children: [
-                  _buildHeaderCell('RANK', align: pw.TextAlign.center), 
-                  _buildHeaderCell('PHOTO', align: pw.TextAlign.center), 
-                  _buildHeaderCell('PLAYER NAME'), 
-                  _buildHeaderCell('LOST', align: pw.TextAlign.center), 
-                  _buildHeaderCell('TOTAL', align: pw.TextAlign.right), 
-                  _buildHeaderCell('GIVEN', align: pw.TextAlign.right), 
-                  _buildHeaderCell('DUE', align: pw.TextAlign.right),
-                  _buildHeaderCell('CREDIT', align: pw.TextAlign.right), // New header
+                  _buildHeaderCell('RANK', align: pw.TextAlign.center), _buildHeaderCell('PHOTO', align: pw.TextAlign.center), _buildHeaderCell('PLAYER NAME'), _buildHeaderCell('LOST', align: pw.TextAlign.center), _buildHeaderCell('TOTAL', align: pw.TextAlign.right), _buildHeaderCell('GIVEN', align: pw.TextAlign.right), _buildHeaderCell('DUE', align: pw.TextAlign.right), _buildHeaderCell('CREDIT', align: pw.TextAlign.right),
                 ]),
                 ...sortedPlayers.asMap().entries.where((e) => (e.value['total'] as int) > 0 || (e.value['surplus'] as double) > 0).map((entry) {
                   final i = entry.key;
@@ -327,17 +433,17 @@ class ExportService {
                   }
                   
                   return pw.TableRow(children: [
-                    _buildDataCell('${i + 1}', align: pw.TextAlign.center, fontSize: 7),
+                    _buildDataCell('${i + 1}', align: pw.TextAlign.center, fontSize: 8),
                     pw.Padding(padding: const pw.EdgeInsets.all(2), child: pw.Center(child: pw.Container(
-                      height: 18, width: 18, decoration: pw.BoxDecoration(shape: pw.BoxShape.circle, color: PdfColors.grey200, image: playerPhoto != null ? pw.DecorationImage(image: playerPhoto, fit: pw.BoxFit.cover) : null),
-                      child: playerPhoto == null ? pw.Center(child: pw.Text(p['name'][0].toUpperCase(), style: const pw.TextStyle(fontSize: 5))) : null,
+                      height: 20, width: 20, decoration: pw.BoxDecoration(shape: pw.BoxShape.circle, color: PdfColors.grey200, image: playerPhoto != null ? pw.DecorationImage(image: playerPhoto, fit: pw.BoxFit.cover) : null),
+                      child: playerPhoto == null ? pw.Center(child: pw.Text(p['name'][0].toUpperCase(), style: const pw.TextStyle(fontSize: 6))) : null,
                     ))),
-                    _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold, fontSize: 7, softWrap: false),
-                    _buildDataCell('$lost', align: pw.TextAlign.center, fontSize: 7),
-                    _buildDataCell('${fine.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, fontSize: 7),
-                    _buildDataCell('${given.toInt()}', align: pw.TextAlign.right, color: PdfColors.green700, fontSize: 7),
-                    _buildDataCell('${due.toInt()}', align: pw.TextAlign.right, color: due > 0 ? PdfColors.red700 : PdfColors.green700, fontWeight: pw.FontWeight.bold, fontSize: 7),
-                    _buildDataCell('${credit.toInt()}', align: pw.TextAlign.right, color: credit > 0 ? PdfColors.blue700 : PdfColors.grey400, fontWeight: credit > 0 ? pw.FontWeight.bold : null, fontSize: 7),
+                    _buildDataCell(p['name'].toString().toUpperCase(), fontWeight: pw.FontWeight.bold, fontSize: 8, softWrap: false),
+                    _buildDataCell('$lost', align: pw.TextAlign.center, fontSize: 8),
+                    _buildDataCell('${fine.toInt()}', align: pw.TextAlign.right, fontWeight: pw.FontWeight.bold, fontSize: 8),
+                    _buildDataCell('${given.toInt()}', align: pw.TextAlign.right, color: PdfColors.green700, fontSize: 8),
+                    _buildDataCell('${due.toInt()}', align: pw.TextAlign.right, color: due > 0 ? PdfColors.red700 : PdfColors.green700, fontWeight: pw.FontWeight.bold, fontSize: 8),
+                    _buildDataCell('${credit.toInt()}', align: pw.TextAlign.right, color: credit > 0 ? PdfColors.blue700 : PdfColors.grey400, fontWeight: credit > 0 ? pw.FontWeight.bold : null, fontSize: 8),
                   ]);
                 }),
               ],
@@ -353,6 +459,7 @@ class ExportService {
   static Future<void> exportFineReport({required String monthYear, required List<Map<String, dynamic>> sortedPlayers}) async {
     final pdf = pw.Document();
     await addFineReport(pdf, monthYear: monthYear, sortedPlayers: sortedPlayers);
+    await addPaymentInstructionPage(pdf);
     await _saveAndDownload(await pdf.save(), 'fine_report_${monthYear.replaceAll('-', '_')}.pdf');
   }
 

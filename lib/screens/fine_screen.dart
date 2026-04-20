@@ -10,7 +10,6 @@ import '../providers/auth_provider.dart';
 import '../models/fine_payment.dart';
 import '../models/contribution.dart';
 import '../utils/export_service.dart';
-import '../services/sms_service.dart';
 
 class FineScreen extends StatefulWidget {
   const FineScreen({super.key});
@@ -56,7 +55,6 @@ class _FineScreenState extends State<FineScreen> {
       final int totalLost = p['total'] as int;
       final double totalFineOwed = totalLost * 50.0;
       
-      // Calculate Total Money Received from this player
       final double directFinePayments = fineProvider.getTotalPaidForPlayer(playerId, _selectedMonthYear);
       final double allContributions = contributionProvider.contributions
           .where((c) => c.playerId == playerId && (_selectedMonthYear == 'Overall' || c.monthYear == _selectedMonthYear))
@@ -64,7 +62,6 @@ class _FineScreenState extends State<FineScreen> {
 
       final double totalMoneyGiven = directFinePayments + allContributions;
       
-      // Calculate Balance Logic
       double due = 0;
       double credit = 0;
       
@@ -224,7 +221,7 @@ class _FineScreenState extends State<FineScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
-                child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 30),
+                child: const Icon(Icons.account_balance_outlined, color: Colors.white, size: 30),
               ),
               const SizedBox(width: 15),
               Expanded(
@@ -257,21 +254,21 @@ class _FineScreenState extends State<FineScreen> {
           
           Row(
             children: [
-              Expanded(child: _buildSquareDetail('BALLS LOST', '$lost', Colors.white24)),
+              Expanded(child: _buildSquareDetail('BALLS LOST', '$lost', Colors.white.withOpacity(0.15))),
               const SizedBox(width: 10),
-              Expanded(child: _buildSquareDetail('TOTAL FINE', '${fine.toInt()}', Colors.yellowAccent.withOpacity(0.1), textCol: Colors.yellowAccent)),
+              Expanded(child: _buildSquareDetail('TOTAL FINE', '${fine.toInt()}', Colors.yellowAccent.withOpacity(0.2), textCol: Colors.yellowAccent)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _buildSquareDetail('TOTAL GIVEN', '${given.toInt()}', Colors.blueAccent.withOpacity(0.1), textCol: Colors.blueAccent)),
+              Expanded(child: _buildSquareDetail('TOTAL GIVEN', '${given.toInt()}', Colors.blueAccent.withOpacity(0.2), textCol: Colors.blueAccent)),
               const SizedBox(width: 10),
-              Expanded(child: _buildSquareDetail('CLUB CREDIT', '${credit.toInt()}', Colors.greenAccent.withOpacity(0.1), textCol: Colors.greenAccent)),
+              Expanded(child: _buildSquareDetail('CLUB CREDIT', '${credit.toInt()}', Colors.greenAccent.withOpacity(0.2), textCol: Colors.greenAccent)),
             ],
           ),
           const SizedBox(height: 10),
-          _buildSquareDetail('DUE BALANCE', '${due.toInt()}', due > 0 ? Colors.orangeAccent.withOpacity(0.1) : Colors.greenAccent.withOpacity(0.1), textCol: due > 0 ? Colors.orangeAccent : Colors.greenAccent, fullWidth: true),
+          _buildSquareDetail('DUE BALANCE', '${due.toInt()}', due > 0 ? Colors.black.withOpacity(0.3) : Colors.greenAccent.withOpacity(0.2), textCol: due > 0 ? Colors.orangeAccent : Colors.greenAccent, fullWidth: true),
 
           const SizedBox(height: 20),
           Text(
@@ -295,7 +292,7 @@ class _FineScreenState extends State<FineScreen> {
       ),
       child: Column(
         children: [
-          Text(label, style: GoogleFonts.bebasNeue(color: Colors.white38, fontSize: 10, letterSpacing: 1)),
+          Text(label, style: GoogleFonts.bebasNeue(color: Colors.white70, fontSize: 10, letterSpacing: 1)),
           Text(val, style: GoogleFonts.bebasNeue(color: textCol, fontSize: 20)),
         ],
       ),
@@ -353,21 +350,7 @@ class _FineScreenState extends State<FineScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (Provider.of<AuthProvider>(context, listen: false).isAdmin)
-                            IconButton(
-                              icon: const Icon(Icons.message_outlined, color: Colors.orange, size: 18),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => _showCustomSmsDialog(context, p, total, p['totalFine'], given, due),
-                            ),
-                          if (Provider.of<AuthProvider>(context, listen: false).isAdmin)
-                            const SizedBox(width: 10),
-                          Text('$total BALLS', style: GoogleFonts.bebasNeue(color: i == 0 ? Colors.redAccent : Colors.white70, fontSize: 15)),
-                        ],
-                      ),
+                      Text('$total BALLS', style: GoogleFonts.bebasNeue(color: i == 0 ? Colors.redAccent : Colors.white70, fontSize: 15)),
                       if (credit > 0)
                         Text('CREDIT: ${credit.toInt()}', style: GoogleFonts.bebasNeue(color: Colors.greenAccent, fontSize: 13)),
                     ],
@@ -392,68 +375,6 @@ class _FineScreenState extends State<FineScreen> {
           ),
         );
       },
-    );
-  }
-
-  void _showCustomSmsDialog(BuildContext context, Map<String, dynamic> player, int lost, double fine, double given, double due) {
-    final String initialMsg = SmsService.generateFineMessage(
-      name: player['name'],
-      ballsLost: lost,
-      totalFine: fine,
-      givenAmount: given,
-      dueAmount: due,
-    );
-    final controller = TextEditingController(text: initialMsg);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF020C3B),
-        title: Text('SEND SMS TO ${player['name'].toString().toUpperCase()}', style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1.2)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Number: ${player['phone']}', style: const TextStyle(color: Colors.white38, fontSize: 12)),
-            const SizedBox(height: 15),
-            TextField(
-              controller: controller,
-              maxLines: 5,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final result = await SmsService.sendCustomSms(
-                phoneNumber: player['phone'],
-                message: controller.text,
-              );
-              
-              if (context.mounted) {
-                final bool isSuccess = result == "SUCCESS";
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(isSuccess ? "SMS sent to ${player['name']}" : "SMS Failed: $result"),
-                    backgroundColor: isSuccess ? Colors.green : Colors.red,
-                    duration: const Duration(seconds: 4),
-                  )
-                );
-              }
-            },
-            child: const Text('SEND NOW', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
     );
   }
 
@@ -587,7 +508,7 @@ class _FineScreenState extends State<FineScreen> {
         title: Text('DELETE RECORD', style: GoogleFonts.bebasNeue(color: Colors.white)),
         content: Text('Remove this record of ${payment.amountPaid.toInt()}?', style: GoogleFonts.poppins(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('CANCEL', style: GoogleFonts.poppins())),
           TextButton(
             onPressed: () {
               provider.deletePayment(payment.id!);
